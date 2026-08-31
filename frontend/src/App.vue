@@ -1,13 +1,22 @@
 <script setup lang="ts">
+import {
+  Menu,
+  MenuButton,
+  MenuItem,
+  MenuItems,
+  TransitionRoot,
+} from '@headlessui/vue'
 import { ref } from 'vue'
 import { AddFiles, MoveItem, RemoveItem } from './api'
 import ConfirmDialog from './components/ConfirmDialog.vue'
 import LauncherRow from './components/LauncherRow.vue'
 import ModalDialog from './components/ModalDialog.vue'
+import { useAutoMinimize } from './composables/useAutoMinimize'
 import { useLauncher } from './composables/useLauncher'
 import { showError } from './utils'
 
 const { items } = useLauncher()
+const { autoMinimize, toggle: toggleAutoMinimize } = useAutoMinimize()
 
 const modalOpen = ref(false)
 const modalMode = ref<'rename' | 'details'>('rename')
@@ -82,6 +91,36 @@ function onAddFiles() {
         Add Files
       </button>
       <span class="text-gray-500">Drop files anywhere to add them</span>
+
+      <Menu as="div" class="relative ml-auto">
+        <MenuButton class="rounded border border-gray-400 bg-white px-2 py-1 hover:bg-gray-200">
+          ⚙
+        </MenuButton>
+        <TransitionRoot
+          enter="transition duration-100 ease-out" enter-from="opacity-0 scale-95"
+          enter-to="opacity-100 scale-100" leave="transition duration-75 ease-in" leave-from="opacity-100 scale-100"
+          leave-to="opacity-0 scale-95"
+        >
+          <MenuItems
+            class="absolute right-0 z-10 mt-1 w-56 origin-top-right rounded border border-gray-300 bg-white py-1 shadow-md focus:outline-none"
+          >
+            <MenuItem v-slot="{ active }">
+              <button
+                class="flex w-full items-center gap-2 px-3 py-1.5 text-left" :class="active ? 'bg-gray-100' : ''"
+                @click="toggleAutoMinimize"
+              >
+                <span
+                  class="inline-flex h-4 w-4 shrink-0 items-center justify-center rounded border text-xs"
+                  :class="autoMinimize ? 'border-blue-500 bg-blue-500 text-white' : 'border-gray-400 bg-white'"
+                >
+                  <span v-if="autoMinimize">✓</span>
+                </span>
+                Auto-minimize window
+              </button>
+            </MenuItem>
+          </MenuItems>
+        </TransitionRoot>
+      </Menu>
     </header>
 
     <main class="flex-1 overflow-y-auto p-2">

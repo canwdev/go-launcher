@@ -18,6 +18,10 @@ export function Details(arg1) {
   return window['go']['main']['App']['Details'](arg1);
 }
 
+export function GetAutoMinimize() {
+  return window['go']['main']['App']['GetAutoMinimize']();
+}
+
 export function GetItems() {
   return window['go']['main']['App']['GetItems']();
 }
@@ -40,6 +44,10 @@ export function RenameItem(arg1, arg2) {
 
 export function Reveal(arg1) {
   return window['go']['main']['App']['Reveal'](arg1);
+}
+
+export function SetAutoMinimize(arg1) {
+  return window['go']['main']['App']['SetAutoMinimize'](arg1);
 }
 
 export function Stop(arg1) {

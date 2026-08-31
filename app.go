@@ -29,6 +29,11 @@ type LauncherItem struct {
 
 type LauncherData struct {
 	LauncherFiles []LauncherItem `json:"launcher_files"`
+	Settings      Settings       `json:"settings"`
+}
+
+type Settings struct {
+	AutoMinimize bool `json:"auto_minimize"`
 }
 
 type LauncherItemView struct {
@@ -94,11 +99,11 @@ func writeIcon(path string) string {
 func loadLauncherData() LauncherData {
 	data, err := os.ReadFile(saveFile)
 	if err != nil {
-		return LauncherData{}
+		return LauncherData{Settings: Settings{AutoMinimize: true}}
 	}
 	var ld LauncherData
 	if err := json.Unmarshal(data, &ld); err != nil {
-		return LauncherData{}
+		return LauncherData{Settings: Settings{AutoMinimize: true}}
 	}
 	for i := range ld.LauncherFiles {
 		ld.LauncherFiles[i].Path = normalizePath(ld.LauncherFiles[i].Path)
@@ -106,7 +111,19 @@ func loadLauncherData() LauncherData {
 			ld.LauncherFiles[i].Title = defaultTitle(absPath(ld.LauncherFiles[i].Path))
 		}
 	}
+	if !hasSettingsKey(data) {
+		ld.Settings.AutoMinimize = true
+	}
 	return ld
+}
+
+func hasSettingsKey(data []byte) bool {
+	var raw map[string]json.RawMessage
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return false
+	}
+	_, ok := raw["settings"]
+	return ok
 }
 
 func writeLauncherData(ld LauncherData) {
@@ -232,7 +249,7 @@ func (a *App) saveLauncherData() {
 			}
 		}
 		a.orderMoved = false
-		writeLauncherData(LauncherData{LauncherFiles: merged})
+		writeLauncherData(LauncherData{LauncherFiles: merged, Settings: a.ld.Settings})
 		return
 	}
 	for _, k := range order {
@@ -254,7 +271,7 @@ func (a *App) saveLauncherData() {
 			merged = append(merged, memItem)
 		}
 	}
-	writeLauncherData(LauncherData{LauncherFiles: merged})
+	writeLauncherData(LauncherData{LauncherFiles: merged, Settings: a.ld.Settings})
 }
 
 func (a *App) iconURL(rel string) string {
@@ -317,8 +334,12 @@ func (a *App) launch(id int) error {
 		}
 		a.mu.Lock()
 		a.running[path] = p
+		autoMinimize := a.ld.Settings.AutoMinimize
 		a.mu.Unlock()
 		a.emitUpdated()
+		if autoMinimize {
+			runtime.WindowMinimise(a.ctx)
+		}
 		go func() {
 			_ = p.wait()
 			elapsed := time.Since(p.start).Milliseconds()
@@ -330,12 +351,16 @@ func (a *App) launch(id int) error {
 				}
 			}
 			delete(a.running, path)
+			restore := a.ld.Settings.AutoMinimize && len(a.running) == 0
 			if p.cleanup != nil {
 				p.cleanup()
 			}
 			a.saveLauncherData()
 			a.mu.Unlock()
 			a.emitUpdated()
+			if restore {
+				runtime.WindowUnminimise(a.ctx)
+			}
 		}()
 		return nil
 	}
@@ -369,6 +394,23 @@ func (a *App) Stop(id int) error {
 		a.emitUpdated()
 	}
 	return err
+}
+
+func (a *App) GetAutoMinimize() bool {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return a.ld.Settings.AutoMinimize
+}
+
+func (a *App) SetAutoMinimize(enabled bool) error {
+	a.mu.Lock()
+	a.ld.Settings.AutoMinimize = enabled
+	a.saveLauncherData()
+	a.mu.Unlock()
+	if a.ctx != nil {
+		runtime.EventsEmit(a.ctx, "settings:updated")
+	}
+	return nil
 }
 
 func (a *App) AddFiles() error {

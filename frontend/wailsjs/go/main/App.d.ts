@@ -10,6 +10,8 @@ export function ChangeIcon(arg1:number):Promise<void>;
 
 export function Details(arg1:number):Promise<string>;
 
+export function GetAutoMinimize():Promise<boolean>;
+
 export function GetItems():Promise<Array<main.LauncherItemView>>;
 
 export function Launch(arg1:number):Promise<void>;
@@ -21,6 +23,8 @@ export function RemoveItem(arg1:number):Promise<void>;
 export function RenameItem(arg1:number,arg2:string):Promise<void>;
 
 export function Reveal(arg1:number):Promise<void>;
+
+export function SetAutoMinimize(arg1:boolean):Promise<void>;
 
 export function Stop(arg1:number):Promise<void>;
 
