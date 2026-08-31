@@ -141,6 +141,7 @@ type App struct {
 	running     map[string]*runningProc
 	removed     map[string]bool
 	appModified map[string]bool
+	orderMoved  bool
 	iconCache   map[string]string
 }
 
@@ -212,6 +213,28 @@ func (a *App) saveLauncherData() {
 	}
 
 	merged := make([]LauncherItem, 0, len(disk.LauncherFiles)+len(a.ld.LauncherFiles))
+	if a.orderMoved {
+		for _, memItem := range a.ld.LauncherFiles {
+			k := itemKey(memItem)
+			item := memItem
+			if !a.appModified[k] {
+				if diskItem, inDisk := diskByKey[k]; inDisk {
+					diskItem.RuntimeMs = memItem.RuntimeMs
+					item = diskItem
+				}
+			}
+			merged = append(merged, item)
+		}
+		for _, diskItem := range disk.LauncherFiles {
+			k := itemKey(diskItem)
+			if _, inMem := memByKey[k]; !inMem && !a.removed[k] {
+				merged = append(merged, diskItem)
+			}
+		}
+		a.orderMoved = false
+		writeLauncherData(LauncherData{LauncherFiles: merged})
+		return
+	}
 	for _, k := range order {
 		if a.removed[k] {
 			continue
@@ -556,4 +579,23 @@ func (a *App) Details(id int) string {
 		return ""
 	}
 	return string(b)
+}
+
+func (a *App) MoveItem(from, to int) error {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	n := len(a.ld.LauncherFiles)
+	if from < 0 || from >= n || to < 0 || to >= n {
+		return fmt.Errorf("invalid index")
+	}
+	if from == to {
+		return nil
+	}
+	item := a.ld.LauncherFiles[from]
+	a.ld.LauncherFiles = append(a.ld.LauncherFiles[:from], a.ld.LauncherFiles[from+1:]...)
+	a.ld.LauncherFiles = append(a.ld.LauncherFiles[:to], append([]LauncherItem{item}, a.ld.LauncherFiles[to:]...)...)
+	a.orderMoved = true
+	a.saveLauncherData()
+	a.emitUpdated()
+	return nil
 }

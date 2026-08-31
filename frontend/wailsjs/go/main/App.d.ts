@@ -14,6 +14,8 @@ export function GetItems():Promise<Array<main.LauncherItemView>>;
 
 export function Launch(arg1:number):Promise<void>;
 
+export function MoveItem(arg1:number,arg2:number):Promise<void>;
+
 export function RemoveItem(arg1:number):Promise<void>;
 
 export function RenameItem(arg1:number,arg2:string):Promise<void>;

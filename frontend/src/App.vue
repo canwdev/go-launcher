@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref } from 'vue'
-import { AddFiles, RemoveItem } from './api'
+import { AddFiles, MoveItem, RemoveItem } from './api'
 import ConfirmDialog from './components/ConfirmDialog.vue'
 import LauncherRow from './components/LauncherRow.vue'
 import ModalDialog from './components/ModalDialog.vue'
@@ -18,6 +18,9 @@ const activeId = ref(-1)
 const confirmOpen = ref(false)
 const confirmMessage = ref('')
 const deleteId = ref(-1)
+
+const draggingIndex = ref<number | null>(null)
+const dragOverIndex = ref<number | null>(null)
 
 function openModal(mode: 'rename' | 'details', index: number) {
   activeId.value = index
@@ -41,6 +44,27 @@ function onDeleteRequested(index: number) {
 function onConfirmDelete() {
   confirmOpen.value = false
   RemoveItem(deleteId.value).catch(showError)
+}
+
+function onDragStart(index: number) {
+  draggingIndex.value = index
+  dragOverIndex.value = null
+}
+
+function onDragOver(index: number) {
+  dragOverIndex.value = index
+}
+
+function onDrop(target: number) {
+  if (draggingIndex.value !== null && draggingIndex.value !== target)
+    MoveItem(draggingIndex.value, target).catch(showError)
+  draggingIndex.value = null
+  dragOverIndex.value = null
+}
+
+function onDragEnd() {
+  draggingIndex.value = null
+  dragOverIndex.value = null
 }
 
 function onAddFiles() {
@@ -72,9 +96,15 @@ function onAddFiles() {
         :key="index"
         :item="item"
         :index="index"
+        :dragging="draggingIndex === index"
+        :drag-over="dragOverIndex === index && draggingIndex !== null && draggingIndex !== index"
         @rename="openModal('rename', index)"
         @details="openModal('details', index)"
         @delete="onDeleteRequested(index)"
+        @dragstart="onDragStart(index)"
+        @dragover="onDragOver(index)"
+        @drop="onDrop(index)"
+        @dragend="onDragEnd"
       />
     </main>
 

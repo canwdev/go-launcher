@@ -26,6 +26,10 @@ export function Launch(arg1) {
   return window['go']['main']['App']['Launch'](arg1);
 }
 
+export function MoveItem(arg1, arg2) {
+  return window['go']['main']['App']['MoveItem'](arg1, arg2);
+}
+
 export function RemoveItem(arg1) {
   return window['go']['main']['App']['RemoveItem'](arg1);
 }
