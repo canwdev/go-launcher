@@ -4,6 +4,7 @@ package main
 
 import (
 	"errors"
+	"os/exec"
 	"syscall"
 	"time"
 	"unsafe"
@@ -65,6 +66,10 @@ func openWithDefaultHandler(path string) error {
 		_ = windows.CloseHandle(h)
 	}
 	return err
+}
+
+func revealFile(path string) error {
+	return exec.Command("explorer", "/select,"+path).Start()
 }
 
 func startTracked(path string, proc *runningProc) error {

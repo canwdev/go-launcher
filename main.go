@@ -3,6 +3,9 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"image"
+	_ "image/gif"
+	_ "image/jpeg"
 	"image/png"
 	"os"
 	"path/filepath"
@@ -10,12 +13,16 @@ import (
 	"strings"
 	"time"
 
+	_ "golang.org/x/image/bmp"
+
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/app"
 	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/dialog"
 	"fyne.io/fyne/v2/layout"
+	"fyne.io/fyne/v2/storage"
+	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 )
 
@@ -41,6 +48,10 @@ const saveFile = "go-launcher-data.json"
 
 var running = map[string]*runningProc{}
 
+var removed = map[string]bool{}
+
+var appModified = map[string]bool{}
+
 var absBase, _ = filepath.Abs(".")
 
 func toStoredPath(abs string) string {
@@ -60,25 +71,25 @@ func absPath(p string) string {
 
 const iconsDir = "icons"
 
-func writeIcon(path string) string {
-	img, err := iconForFile(path)
-	if err != nil {
-		return ""
-	}
-	if err := os.MkdirAll(filepath.Join(absBase, iconsDir), 0755); err != nil {
-		return ""
-	}
+func sanitizeBase(name string) string {
 	base := strings.Map(func(r rune) rune {
 		switch r {
 		case '<', '>', ':', '"', '/', '\\', '|', '?', '*':
 			return '_'
 		}
 		return r
-	}, filepath.Base(path))
+	}, name)
 	if len(base) > 40 {
 		base = base[:40]
 	}
-	name := fmt.Sprintf("%s-%d.png", base, time.Now().UnixNano())
+	return base
+}
+
+func saveImage(img image.Image, nameBase string) string {
+	if err := os.MkdirAll(filepath.Join(absBase, iconsDir), 0755); err != nil {
+		return ""
+	}
+	name := fmt.Sprintf("%s-%d.png", sanitizeBase(nameBase), time.Now().UnixNano())
 	abs := filepath.Join(absBase, iconsDir, name)
 	f, err := os.Create(abs)
 	if err != nil {
@@ -89,6 +100,14 @@ func writeIcon(path string) string {
 		return ""
 	}
 	return "./" + filepath.ToSlash(filepath.Join(iconsDir, name))
+}
+
+func writeIcon(path string) string {
+	img, err := iconForFile(path)
+	if err != nil {
+		return ""
+	}
+	return saveImage(img, filepath.Base(path))
 }
 
 type tapRow struct {
@@ -118,6 +137,10 @@ func normalizePath(path string) string {
 	return p
 }
 
+func defaultTitle(path string) string {
+	return strings.TrimSuffix(filepath.Base(path), filepath.Ext(path))
+}
+
 func loadLauncherData() LauncherData {
 	data, err := os.ReadFile(saveFile)
 	if err != nil {
@@ -130,15 +153,76 @@ func loadLauncherData() LauncherData {
 	for i := range ld.LauncherFiles {
 		ld.LauncherFiles[i].Path = normalizePath(ld.LauncherFiles[i].Path)
 		if ld.LauncherFiles[i].Title == "" {
-			ld.LauncherFiles[i].Title = filepath.Base(absPath(ld.LauncherFiles[i].Path))
+			ld.LauncherFiles[i].Title = defaultTitle(absPath(ld.LauncherFiles[i].Path))
 		}
 	}
 	return ld
 }
 
 func saveLauncherData(ld LauncherData) {
+	disk, ok := readDiskData()
+	if !ok {
+		writeLauncherData(ld)
+		return
+	}
+
+	diskByKey := make(map[string]LauncherItem, len(disk.LauncherFiles))
+	order := make([]string, 0, len(disk.LauncherFiles))
+	for _, item := range disk.LauncherFiles {
+		k := itemKey(item)
+		if _, exists := diskByKey[k]; !exists {
+			order = append(order, k)
+		}
+		diskByKey[k] = item
+	}
+
+	memByKey := make(map[string]LauncherItem, len(ld.LauncherFiles))
+	for _, item := range ld.LauncherFiles {
+		memByKey[itemKey(item)] = item
+	}
+
+	merged := make([]LauncherItem, 0, len(disk.LauncherFiles)+len(ld.LauncherFiles))
+	for _, k := range order {
+		if removed[k] {
+			continue
+		}
+		diskItem := diskByKey[k]
+		if memItem, inMem := memByKey[k]; inMem {
+			if appModified[k] {
+				diskItem = memItem
+			} else {
+				diskItem.RuntimeMs = memItem.RuntimeMs
+			}
+		}
+		merged = append(merged, diskItem)
+	}
+	for k, memItem := range memByKey {
+		if _, inDisk := diskByKey[k]; !inDisk && !removed[k] {
+			merged = append(merged, memItem)
+		}
+	}
+	writeLauncherData(LauncherData{LauncherFiles: merged})
+}
+
+func writeLauncherData(ld LauncherData) {
 	data, _ := json.MarshalIndent(ld, "", "  ")
 	_ = os.WriteFile(saveFile, data, 0644)
+}
+
+func readDiskData() (LauncherData, bool) {
+	data, err := os.ReadFile(saveFile)
+	if err != nil {
+		return LauncherData{}, false
+	}
+	var ld LauncherData
+	if err := json.Unmarshal(data, &ld); err != nil {
+		return LauncherData{}, false
+	}
+	return ld, true
+}
+
+func itemKey(item LauncherItem) string {
+	return filepath.Clean(absPath(normalizePath(item.Path)))
 }
 
 func formatRuntime(ms int64) string {
@@ -243,8 +327,8 @@ func main() {
 			name := widget.NewLabel("placeholder")
 			runtime := widget.NewLabel("")
 			runBtn := widget.NewButton("Run", nil)
-			delBtn := widget.NewButton("Delete", nil)
-			return &tapRow{CanvasObject: container.NewHBox(iconImg, name, layout.NewSpacer(), runtime, runBtn, delBtn)}
+			menuBtn := widget.NewButtonWithIcon("", theme.MoreHorizontalIcon(), nil)
+			return &tapRow{CanvasObject: container.NewHBox(iconImg, name, layout.NewSpacer(), runtime, runBtn, menuBtn)}
 		},
 		func(id widget.ListItemID, obj fyne.CanvasObject) {
 			path := absPath(ld.LauncherFiles[id].Path)
@@ -254,7 +338,7 @@ func main() {
 			name := box.Objects[1].(*widget.Label)
 			runtimeLabel := box.Objects[3].(*widget.Label)
 			runBtn := box.Objects[4].(*widget.Button)
-			delBtn := box.Objects[5].(*widget.Button)
+			menuBtn := box.Objects[5].(*widget.Button)
 
 			title := ld.LauncherFiles[id].Title
 			if title == "" {
@@ -311,27 +395,130 @@ func main() {
 				launch()
 			}
 
-			delBtn.OnTapped = func() {
-				dialog.ShowConfirm("Confirm Delete",
-					fmt.Sprintf("Delete \"%s\"?", filepath.Base(path)),
-					func(ok bool) {
-						if !ok {
+			menuBtn.OnTapped = func() {
+				rename := func() {
+					entry := widget.NewEntry()
+					entry.SetText(title)
+					d := dialog.NewForm("Rename", "OK", "Cancel",
+						[]*widget.FormItem{widget.NewFormItem("Name", entry)},
+						func(ok bool) {
+							if !ok {
+								return
+							}
+							newTitle := strings.TrimSpace(entry.Text)
+							if newTitle == "" {
+								return
+							}
+							ld.LauncherFiles[id].Title = newTitle
+							appModified[itemKey(ld.LauncherFiles[id])] = true
+							saveLauncherData(ld)
+							fileList.Refresh()
+						}, w)
+					d.Resize(fyne.NewSize(400, d.MinSize().Height))
+					d.Show()
+				}
+
+				changeIcon := func() {
+					fd := dialog.NewFileOpen(func(reader fyne.URIReadCloser, err error) {
+						if err != nil {
+							dialog.ShowError(err, w)
 							return
 						}
-						stopProcess(path)
-						if item := ld.LauncherFiles[id]; item.Icon != "" {
-							_ = os.Remove(absPath(item.Icon))
+						if reader == nil {
+							return
 						}
-						newItems := make([]LauncherItem, 0, len(ld.LauncherFiles)-1)
-						for i, item := range ld.LauncherFiles {
-							if i != id {
-								newItems = append(newItems, item)
-							}
+						defer reader.Close()
+						img, _, err := image.Decode(reader)
+						if err != nil {
+							dialog.ShowError(fmt.Errorf("unsupported image: %v", err), w)
+							return
 						}
-						ld.LauncherFiles = newItems
+						if old := ld.LauncherFiles[id].Icon; old != "" {
+							_ = os.Remove(absPath(old))
+						}
+						icon := saveImage(img, filepath.Base(path)+"-custom")
+						if icon == "" {
+							dialog.ShowError(fmt.Errorf("failed to save icon"), w)
+							return
+						}
+						ld.LauncherFiles[id].Icon = icon
+						appModified[itemKey(ld.LauncherFiles[id])] = true
 						saveLauncherData(ld)
 						fileList.Refresh()
 					}, w)
+					fd.SetFilter(storage.NewExtensionFileFilter([]string{".png", ".jpg", ".jpeg", ".gif", ".bmp"}))
+					fd.Show()
+				}
+
+				details := func() {
+					b, err := json.MarshalIndent(ld.LauncherFiles[id], "", "  ")
+					if err != nil {
+						dialog.ShowError(err, w)
+						return
+					}
+					entry := widget.NewEntry()
+					entry.SetText(string(b))
+					entry.MultiLine = true
+					entry.Wrapping = fyne.TextWrapWord
+					copyBtn := widget.NewButton("Copy to Clipboard", func() {
+						w.Clipboard().SetContent(string(b))
+					})
+					d := dialog.NewCustom("Details", "Close",
+						container.NewBorder(nil, copyBtn, nil, nil, entry), w)
+					d.Resize(fyne.NewSize(460, 320))
+					d.Show()
+				}
+
+				pop := widget.NewPopUpMenu(fyne.NewMenu("",
+					fyne.NewMenuItem("Open containing folder", func() {
+						if err := revealFile(path); err != nil {
+							dialog.ShowError(err, w)
+						}
+					}),
+					fyne.NewMenuItem("Rename", rename),
+					fyne.NewMenuItem("Change icon", changeIcon),
+					fyne.NewMenuItem("Update icon", func() {
+						icon := writeIcon(path)
+						if icon == "" {
+							dialog.ShowError(fmt.Errorf("failed to regenerate icon"), w)
+							return
+						}
+						if old := ld.LauncherFiles[id].Icon; old != "" {
+							_ = os.Remove(absPath(old))
+						}
+						ld.LauncherFiles[id].Icon = icon
+						appModified[itemKey(ld.LauncherFiles[id])] = true
+						saveLauncherData(ld)
+						fileList.Refresh()
+					}),
+					fyne.NewMenuItem("Details", details),
+					fyne.NewMenuItemSeparator(),
+					fyne.NewMenuItem("Delete", func() {
+						dialog.ShowConfirm("Confirm Delete",
+							fmt.Sprintf("Delete \"%s\"?", filepath.Base(path)),
+							func(ok bool) {
+								if !ok {
+									return
+								}
+								stopProcess(path)
+								if item := ld.LauncherFiles[id]; item.Icon != "" {
+									_ = os.Remove(absPath(item.Icon))
+								}
+								removed[itemKey(ld.LauncherFiles[id])] = true
+								delete(appModified, itemKey(ld.LauncherFiles[id]))
+								newItems := make([]LauncherItem, 0, len(ld.LauncherFiles)-1)
+								for i, item := range ld.LauncherFiles {
+									if i != id {
+										newItems = append(newItems, item)
+									}
+								}
+								ld.LauncherFiles = newItems
+								saveLauncherData(ld)
+								fileList.Refresh()
+							}, w)
+					}),
+				), w.Canvas())
+				pop.ShowAtRelativePosition(fyne.NewPos(0, menuBtn.Size().Height), menuBtn)
 			}
 		},
 	)
@@ -344,7 +531,7 @@ func main() {
 		}
 	}()
 
-	addBtn := widget.NewButton("Add File", func() {
+	addBtn := widget.NewButton("Add or Drag & Drop File", func() {
 		dialog.ShowFileOpen(func(reader fyne.URIReadCloser, err error) {
 			if err != nil {
 				dialog.ShowError(err, w)
@@ -361,7 +548,8 @@ func main() {
 					return
 				}
 			}
-			ld.LauncherFiles = append(ld.LauncherFiles, LauncherItem{Path: toStoredPath(path), Title: filepath.Base(path), Icon: writeIcon(path)})
+			ld.LauncherFiles = append(ld.LauncherFiles, LauncherItem{Path: toStoredPath(path), Title: defaultTitle(path), Icon: writeIcon(path)})
+			delete(removed, itemKey(LauncherItem{Path: toStoredPath(path)}))
 			saveLauncherData(ld)
 			fileList.Refresh()
 		}, w)
@@ -391,7 +579,8 @@ func main() {
 			if dup {
 				continue
 			}
-			ld.LauncherFiles = append(ld.LauncherFiles, LauncherItem{Path: toStoredPath(path), Title: filepath.Base(path), Icon: writeIcon(path)})
+			ld.LauncherFiles = append(ld.LauncherFiles, LauncherItem{Path: toStoredPath(path), Title: defaultTitle(path), Icon: writeIcon(path)})
+			delete(removed, itemKey(LauncherItem{Path: toStoredPath(path)}))
 			added = true
 		}
 		if added {

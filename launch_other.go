@@ -4,6 +4,7 @@ package main
 
 import (
 	"os/exec"
+	"path/filepath"
 	"runtime"
 	"time"
 )
@@ -14,6 +15,15 @@ func openWithDefaultHandler(path string) error {
 		return exec.Command("open", path).Start()
 	default:
 		return exec.Command("xdg-open", path).Start()
+	}
+}
+
+func revealFile(path string) error {
+	switch runtime.GOOS {
+	case "darwin":
+		return exec.Command("open", "-R", path).Start()
+	default:
+		return exec.Command("xdg-open", filepath.Dir(path)).Start()
 	}
 }
 
