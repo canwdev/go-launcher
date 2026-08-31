@@ -1,7 +1,14 @@
 <script setup lang="ts">
 import type { LauncherItem } from '../api'
+import {
+  Menu,
+  MenuButton,
+  MenuItem,
+  MenuItems,
+  TransitionRoot,
+} from '@headlessui/vue'
 import { computed } from 'vue'
-import { Launch, Stop } from '../api'
+import { ChangeIcon, Launch, Reveal, Stop, UpdateIcon } from '../api'
 import { formatRuntime, showError } from '../utils'
 
 const props = defineProps<{
@@ -10,7 +17,9 @@ const props = defineProps<{
 }>()
 
 const emit = defineEmits<{
-  menu: [position: { x: number, y: number }]
+  rename: []
+  details: []
+  delete: []
 }>()
 
 const runtimeText = computed(() => formatRuntime(props.item.runtime_ms))
@@ -33,39 +42,75 @@ function onDoubleClick() {
   Launch(props.index).catch(showError)
 }
 
-function onMenuButton(event: MouseEvent) {
-  const rect = (event.currentTarget as HTMLElement).getBoundingClientRect()
-  emit('menu', { x: rect.left, y: rect.bottom })
+async function run(action: () => Promise<void>) {
+  try {
+    await action()
+  }
+  catch (err) {
+    showError(err)
+  }
 }
 </script>
 
 <template>
-  <div
-    class="mb-1.5 flex items-center gap-2.5 rounded border border-gray-300 bg-white px-2.5 py-1.5"
-    @dblclick="onDoubleClick"
-  >
-    <img
-      :src="item.iconURL || undefined"
-      alt=""
-      class="h-7 w-7 shrink-0 object-contain"
-    >
-    <span
-      class="min-w-0 flex-1 truncate"
-      :title="item.title"
-    >{{ item.title }}</span>
+  <div class="mb-1.5 flex items-center gap-2.5 rounded border border-gray-300 bg-white px-2.5 py-1.5"
+    @dblclick="onDoubleClick">
+    <img :src="item.iconURL || undefined" alt="" class="h-7 w-7 shrink-0 object-contain">
+    <span class="min-w-0 flex-1 truncate" :title="item.title">{{ item.title }}</span>
     <span class="shrink-0 text-gray-500">{{ runtimeText }}</span>
-    <button
-      class="rounded border border-gray-400 bg-white px-2.5 py-1 hover:bg-gray-200"
-      :class="item.running ? 'border-red-600 bg-red-500 text-white hover:bg-red-600' : ''"
-      @click="onRun"
-    >
+    <button class="rounded border px-2.5 py-1"
+      :class="item.running ? 'border-red-600 bg-red-500 text-white hover:bg-red-600' : 'border-gray-400 bg-white hover:bg-gray-200'"
+      @click="onRun">
       {{ item.running ? 'Stop' : 'Run' }}
     </button>
-    <button
-      class="rounded border border-gray-400 bg-white px-2 py-1 hover:bg-gray-200"
-      @click.stop="onMenuButton"
-    >
-      ⋯
-    </button>
+
+    <Menu as="div" class="relative">
+      <MenuButton class="rounded border border-gray-400 bg-white px-2 py-1 hover:bg-gray-200">
+        ⋯
+      </MenuButton>
+      <TransitionRoot enter="transition duration-100 ease-out" enter-from="opacity-0 scale-95"
+        enter-to="opacity-100 scale-100" leave="transition duration-75 ease-in" leave-from="opacity-100 scale-100"
+        leave-to="opacity-0 scale-95">
+        <MenuItems
+          class="absolute right-0 z-10 mt-1 w-48 origin-top-right rounded border border-gray-300 bg-white py-1 shadow-md focus:outline-none">
+          <MenuItem v-slot="{ active }">
+            <button class="block w-full px-3 py-1.5 text-left" :class="active ? 'bg-gray-100' : ''"
+              @click="run(() => Reveal(props.index))">
+              Open containing folder
+            </button>
+          </MenuItem>
+          <MenuItem v-slot="{ active }">
+            <button class="block w-full px-3 py-1.5 text-left" :class="active ? 'bg-gray-100' : ''"
+              @click="emit('rename')">
+              Rename
+            </button>
+          </MenuItem>
+          <MenuItem v-slot="{ active }">
+            <button class="block w-full px-3 py-1.5 text-left" :class="active ? 'bg-gray-100' : ''"
+              @click="run(() => ChangeIcon(props.index))">
+              Change icon
+            </button>
+          </MenuItem>
+          <MenuItem v-slot="{ active }">
+            <button class="block w-full px-3 py-1.5 text-left" :class="active ? 'bg-gray-100' : ''"
+              @click="run(() => UpdateIcon(props.index))">
+              Update icon
+            </button>
+          </MenuItem>
+          <MenuItem v-slot="{ active }">
+            <button class="block w-full px-3 py-1.5 text-left" :class="active ? 'bg-gray-100' : ''"
+              @click="emit('details')">
+              Details
+            </button>
+          </MenuItem>
+          <MenuItem v-slot="{ active }">
+            <button class="block w-full px-3 py-1.5 text-left text-red-600" :class="active ? 'bg-gray-100' : ''"
+              @click="emit('delete')">
+              Delete
+            </button>
+          </MenuItem>
+        </MenuItems>
+      </TransitionRoot>
+    </Menu>
   </div>
 </template>

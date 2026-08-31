@@ -295,6 +295,7 @@ func (a *App) launch(id int) error {
 		a.mu.Lock()
 		a.running[path] = p
 		a.mu.Unlock()
+		a.emitUpdated()
 		go func() {
 			_ = p.wait()
 			elapsed := time.Since(p.start).Milliseconds()
@@ -340,7 +341,11 @@ func (a *App) Stop(id int) error {
 	}
 	path := absPath(a.ld.LauncherFiles[id].Path)
 	a.mu.Unlock()
-	return a.stopProcess(path)
+	err := a.stopProcess(path)
+	if err == nil {
+		a.emitUpdated()
+	}
+	return err
 }
 
 func (a *App) AddFiles() error {
@@ -403,23 +408,7 @@ func (a *App) RemoveItem(id int) error {
 	}
 	item := a.ld.LauncherFiles[id]
 	path := absPath(item.Path)
-	display := item.Title
-	if display == "" {
-		display = filepath.Base(path)
-	}
 	a.mu.Unlock()
-
-	result, err := runtime.MessageDialog(a.ctx, runtime.MessageDialogOptions{
-		Type:    runtime.QuestionDialog,
-		Title:   "Confirm Delete",
-		Message: fmt.Sprintf("Delete \"%s\"?", filepath.Base(path)),
-	})
-	if err != nil {
-		return err
-	}
-	if result != "Yes" {
-		return nil
-	}
 
 	if err := a.stopProcess(path); err != nil {
 		return err

@@ -33,10 +33,10 @@ The binary is produced at `build/bin/go-launcher.exe` and copied to `go-launcher
 
 - `main.go` — Wails app bootstrap (`wails.Run`, embeds `frontend/dist`)
 - `app.go` — the `App` struct with the methods bound to the frontend (add/remove/rename, run/stop, icons, etc.) plus the launcher data persistence
-- `frontend/` — **Vite + Vue 3 + TypeScript + Tailwind CSS** frontend, managed with bun
+- `frontend/` — **Vite + Vue 3 + TypeScript + Tailwind CSS + Headless UI** frontend, managed with bun
   - `src/api.ts` — typed wrappers around the generated `wailsjs` Go bindings
   - `src/composables/useLauncher.ts` — reactive item list, Wails events & file drop
-  - `src/components/` — `LauncherRow`, `ContextMenu`, `ModalDialog`
+  - `src/components/` — `LauncherRow` (Headless UI `Menu`), `ModalDialog` (Headless UI `Dialog`)
   - `eslint.config.mjs` — [@antfu/eslint-config](https://github.com/antfu/eslint-config)
   - scripts: `bun run dev` / `build` / `typecheck` / `lint` / `lint:fix`
 - `utils.go`, `launch_*.go`, `icon_*.go` — platform helpers (path normalization, process launching, icon extraction)

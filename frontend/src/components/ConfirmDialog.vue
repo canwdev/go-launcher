@@ -6,59 +6,17 @@ import {
   TransitionChild,
   TransitionRoot,
 } from '@headlessui/vue'
-import { ref, watch } from 'vue'
-import { ClipboardSetText } from '../../wailsjs/runtime/runtime'
-import { Details, RenameItem } from '../api'
-import { showError } from '../utils'
 
-const props = defineProps<{
+defineProps<{
   open: boolean
-  index: number
-  mode: 'rename' | 'details'
   title: string
-  initialName: string
+  message: string
 }>()
 
 const emit = defineEmits<{
+  confirm: []
   close: []
 }>()
-
-const name = ref('')
-const details = ref('')
-
-watch(
-  () => [props.open, props.mode, props.index, props.initialName] as const,
-  async ([open, mode, , initialName]) => {
-    if (!open)
-      return
-    name.value = mode === 'rename' ? initialName : ''
-    details.value = ''
-    if (mode === 'details') {
-      try {
-        details.value = await Details(props.index)
-      }
-      catch (err) {
-        showError(err)
-      }
-    }
-  },
-)
-
-async function onOk() {
-  if (props.mode === 'rename') {
-    try {
-      await RenameItem(props.index, name.value)
-    }
-    catch (err) {
-      showError(err)
-    }
-  }
-  emit('close')
-}
-
-function onCopy() {
-  ClipboardSetText(details.value)
-}
 </script>
 
 <template>
@@ -109,40 +67,21 @@ function onCopy() {
             >
               {{ title }}
             </DialogTitle>
-            <input
-              v-if="mode === 'rename'"
-              v-model="name"
-              type="text"
-              autofocus
-              class="w-full rounded border border-gray-400 px-1.5 py-1"
-              @keyup.enter="onOk"
-            >
-            <template v-else>
-              <textarea
-                v-model="details"
-                readonly
-                class="mb-2 h-44 w-full resize-none font-mono text-xs"
-              />
-              <button
-                class="rounded border border-gray-400 bg-white px-2.5 py-1 hover:bg-gray-200"
-                @click="onCopy"
-              >
-                Copy to Clipboard
-              </button>
-            </template>
+            <p class="m-0">
+              {{ message }}
+            </p>
             <div class="mt-3 flex justify-end gap-2">
-              <button
-                v-if="mode === 'rename'"
-                class="rounded border border-gray-400 bg-white px-2.5 py-1 hover:bg-gray-200"
-                @click="onOk"
-              >
-                OK
-              </button>
               <button
                 class="rounded border border-gray-400 bg-white px-2.5 py-1 hover:bg-gray-200"
                 @click="emit('close')"
               >
                 Cancel
+              </button>
+              <button
+                class="rounded border border-red-600 bg-red-500 px-2.5 py-1 text-white hover:bg-red-600"
+                @click="emit('confirm')"
+              >
+                Delete
               </button>
             </div>
           </DialogPanel>

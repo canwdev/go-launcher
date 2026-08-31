@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref } from 'vue'
-import { AddFiles } from './api'
-import ContextMenu from './components/ContextMenu.vue'
+import { AddFiles, RemoveItem } from './api'
+import ConfirmDialog from './components/ConfirmDialog.vue'
 import LauncherRow from './components/LauncherRow.vue'
 import ModalDialog from './components/ModalDialog.vue'
 import { useLauncher } from './composables/useLauncher'
@@ -9,29 +9,38 @@ import { showError } from './utils'
 
 const { items } = useLauncher()
 
-const menu = ref<{ index: number, x: number, y: number } | null>(null)
 const modalOpen = ref(false)
 const modalMode = ref<'rename' | 'details'>('rename')
 const modalTitle = ref('Rename')
+const modalName = ref('')
 const activeId = ref(-1)
 
-function onMenu(index: number, position: { x: number, y: number }) {
-  menu.value = { index, ...position }
-}
-
-function closeMenu() {
-  menu.value = null
-}
+const confirmOpen = ref(false)
+const confirmMessage = ref('')
+const deleteId = ref(-1)
 
 function openModal(mode: 'rename' | 'details', index: number) {
   activeId.value = index
   modalMode.value = mode
   modalTitle.value = mode === 'rename' ? 'Rename' : 'Details'
+  if (mode === 'rename')
+    modalName.value = items.value[index]?.title ?? ''
   modalOpen.value = true
 }
 
 function closeModal() {
   modalOpen.value = false
+}
+
+function onDeleteRequested(index: number) {
+  deleteId.value = index
+  confirmMessage.value = `Delete "${items.value[index]?.title ?? ''}"?`
+  confirmOpen.value = true
+}
+
+function onConfirmDelete() {
+  confirmOpen.value = false
+  RemoveItem(deleteId.value).catch(showError)
 }
 
 function onAddFiles() {
@@ -63,26 +72,27 @@ function onAddFiles() {
         :key="index"
         :item="item"
         :index="index"
-        @menu="(position) => onMenu(index, position)"
+        @rename="openModal('rename', index)"
+        @details="openModal('details', index)"
+        @delete="onDeleteRequested(index)"
       />
     </main>
-
-    <ContextMenu
-      v-if="menu"
-      :index="menu.index"
-      :x="menu.x"
-      :y="menu.y"
-      @close="closeMenu"
-      @rename="openModal('rename', menu.index)"
-      @details="openModal('details', menu.index)"
-    />
 
     <ModalDialog
       :open="modalOpen"
       :index="activeId"
       :mode="modalMode"
       :title="modalTitle"
+      :initial-name="modalName"
       @close="closeModal"
+    />
+
+    <ConfirmDialog
+      :open="confirmOpen"
+      title="Confirm Delete"
+      :message="confirmMessage"
+      @confirm="onConfirmDelete"
+      @close="confirmOpen = false"
     />
   </div>
 </template>
