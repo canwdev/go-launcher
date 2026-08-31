@@ -2,3 +2,5 @@
 *.exe~
 *.json
 /icons
+/frontend/wailsjs
+/build
