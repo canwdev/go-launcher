@@ -1,14 +1,13 @@
 # go-launcher
 
-A minimal [Fyne](https://fyne.io/) demo app for Go. It opens a window with a button; clicking the button prints `Hello!` to the console.
+A minimal [Gio](https://gioui.org/) desktop launcher for Go. It opens a window
+that lists executable files (from `go-launcher-data.json`) and lets you run,
+stop, and manage them.
 
 ## Requirements
 
 - Go 1.23 or later
-- A C compiler (for Fyne's native dependencies):
-  - **Windows**: GCC via [MinGW-w64](https://www.mingw-w64.org/) / [TDM-GCC](https://jmeubank.github.io/tdm-gcc/) (installed on `PATH`)
-  - **macOS**: Xcode Command Line Tools
-  - **Linux**: `gcc` and the GTK development headers (`libgtk-3-dev` on Debian/Ubuntu)
+- No C compiler required on Windows (Gio uses the Direct3D11 backend).
 
 ## Run
 
@@ -22,23 +21,31 @@ go run .
 go build
 ```
 
+Production build (Windows GUI subsystem, no console window):
+
+```sh
+powershell -File build.ps1
+```
+
 ## Overview
 
-`main.go`:
+`main.go` holds the data model and persistence logic; `gui.go` is the Gio
+user interface.
 
-```go
-a := app.New()                          // create the application
-w := a.NewWindow("Hello")               // create a window titled "Hello"
+- `runGUI()` creates the window (`gioui.org/app`) and runs the event loop,
+  rendering the list of launcher files each frame.
+- Rows show the app icon, title, accumulated runtime, a Run/Stop button and a
+  "…" menu (open containing folder, rename, update icon, details, delete).
+- Double-click a row to launch it; runtime is tracked per process and saved to
+  `go-launcher-data.json` when a process exits or the window closes.
+- Dialogs (rename, details, confirm, error) are rendered in-app with an overlay
+  stack; the details dialog can copy its JSON to the clipboard.
 
-w.SetContent(widget.NewButton(          // add a button as the window content
-    "Click me",
-    func() { println("Hello!") },       // callback when clicked
-))
-
-w.ShowAndRun()                          // show the window and run the event loop
-```
+Platform-specific support lives in `icon_windows.go`/`icon_other.go`
+(extracting file icons) and `launch_windows.go`/`launch_other.go` (launching
+processes).
 
 ## References
 
-- [Fyne documentation](https://docs.fyne.io/)
-- [Fyne on GitHub](https://github.com/fyne-io/fyne)
+- [Gio documentation](https://gioui.org/doc)
+- [Gio on sourcehut](https://git.sr.ht/~eliasnaur/gio)
