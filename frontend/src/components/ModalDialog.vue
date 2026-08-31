@@ -102,7 +102,7 @@ function onCopy() {
         leave-to="opacity-0 scale-95"
       >
         <div class="fixed inset-0 flex items-center justify-center p-4">
-          <DialogPanel class="w-[420px] max-w-full rounded-md bg-white p-4">
+          <DialogPanel class="w-[420px] max-w-full rounded-md bg-white p-4 dark:bg-gray-800 dark:text-gray-100">
             <DialogTitle
               as="h3"
               class="mb-2.5 mt-0"
@@ -114,17 +114,17 @@ function onCopy() {
               v-model="name"
               type="text"
               autofocus
-              class="w-full rounded border border-gray-400 px-1.5 py-1"
+              class="w-full rounded border border-gray-400 px-1.5 py-1 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100"
               @keyup.enter="onOk"
             >
             <template v-else>
               <textarea
                 v-model="details"
                 readonly
-                class="mb-2 h-44 w-full resize-none font-mono text-xs"
+                class="mb-2 h-44 w-full resize-none font-mono text-xs dark:bg-gray-700 dark:text-gray-100"
               />
               <button
-                class="rounded border border-gray-400 bg-white px-2.5 py-1 hover:bg-gray-200"
+                class="rounded border border-gray-400 bg-white px-2.5 py-1 hover:bg-gray-200 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 dark:hover:bg-gray-600"
                 @click="onCopy"
               >
                 Copy to Clipboard
@@ -133,13 +133,13 @@ function onCopy() {
             <div class="mt-3 flex justify-end gap-2">
               <button
                 v-if="mode === 'rename'"
-                class="rounded border border-gray-400 bg-white px-2.5 py-1 hover:bg-gray-200"
+                class="rounded border border-gray-400 bg-white px-2.5 py-1 hover:bg-gray-200 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 dark:hover:bg-gray-600"
                 @click="onOk"
               >
                 OK
               </button>
               <button
-                class="rounded border border-gray-400 bg-white px-2.5 py-1 hover:bg-gray-200"
+                class="rounded border border-gray-400 bg-white px-2.5 py-1 hover:bg-gray-200 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 dark:hover:bg-gray-600"
                 @click="emit('close')"
               >
                 Cancel

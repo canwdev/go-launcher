@@ -60,7 +60,7 @@ const emit = defineEmits<{
         leave-to="opacity-0 scale-95"
       >
         <div class="fixed inset-0 flex items-center justify-center p-4">
-          <DialogPanel class="w-[420px] max-w-full rounded-md bg-white p-4">
+          <DialogPanel class="w-[420px] max-w-full rounded-md bg-white p-4 dark:bg-gray-800 dark:text-gray-100">
             <DialogTitle
               as="h3"
               class="mb-2.5 mt-0"
@@ -72,7 +72,7 @@ const emit = defineEmits<{
             </p>
             <div class="mt-3 flex justify-end gap-2">
               <button
-                class="rounded border border-gray-400 bg-white px-2.5 py-1 hover:bg-gray-200"
+                class="rounded border border-gray-400 bg-white px-2.5 py-1 hover:bg-gray-200 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 dark:hover:bg-gray-600"
                 @click="emit('close')"
               >
                 Cancel

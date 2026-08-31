@@ -61,31 +61,25 @@ async function run(action: () => Promise<void>) {
 <template>
   <div
     draggable="true"
-    class="mb-1.5 flex select-none items-center gap-2.5 rounded border border-gray-300 bg-white px-2.5 py-1.5"
-    :class="{
-      'cursor-grab': !dragging,
+    class="mb-1.5 flex select-none items-center gap-2.5 rounded border border-gray-300 bg-white px-2.5 py-1.5 dark:border-gray-700 dark:bg-gray-800" :class="{
       'opacity-40': dragging,
       'border-blue-500': dragOver,
-    }"
-    @dblclick="onDoubleClick"
-    @dragstart="emit('dragstart')"
-    @dragover.prevent="emit('dragover')"
-    @drop.prevent="emit('drop')"
-    @dragend="emit('dragend')"
+    }" @dblclick="onDoubleClick" @dragstart="emit('dragstart')" @dragover.prevent="emit('dragover')"
+    @drop.prevent="emit('drop')" @dragend="emit('dragend')"
   >
     <img :src="item.iconURL || undefined" alt="" class="h-7 w-7 shrink-0 object-contain">
     <span class="min-w-0 flex-1 truncate" :title="item.title">{{ item.title }}</span>
-    <span class="shrink-0 text-gray-500">{{ runtimeText }}</span>
+    <span class="shrink-0 text-gray-500 dark:text-gray-400">{{ runtimeText }}</span>
     <button
-      class="rounded border px-2.5 py-1"
-      :class="item.running ? 'border-red-600 bg-red-500 text-white hover:bg-red-600' : 'border-gray-400 bg-white hover:bg-gray-200'"
+      class="rounded border px-2.5 py-1 cursor-pointer"
+      :class="item.running ? 'border-red-600 bg-red-500 text-white hover:bg-red-600' : 'border-gray-400 bg-white hover:bg-gray-200 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 dark:hover:bg-gray-600'"
       @click="onRun"
     >
       {{ item.running ? 'Stop' : 'Run' }}
     </button>
 
     <Menu as="div" class="relative">
-      <MenuButton class="rounded border border-gray-400 bg-white px-2 py-1 hover:bg-gray-200">
+      <MenuButton class="cursor-pointer rounded border border-gray-400 bg-white px-2 py-1 hover:bg-gray-200 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 dark:hover:bg-gray-600">
         ⋯
       </MenuButton>
       <TransitionRoot
@@ -94,11 +88,11 @@ async function run(action: () => Promise<void>) {
         leave-to="opacity-0 scale-95"
       >
         <MenuItems
-          class="absolute right-0 z-10 mt-1 w-48 origin-top-right rounded border border-gray-300 bg-white py-1 shadow-md focus:outline-none"
+          class="absolute right-0 z-10 mt-1 w-48 origin-top-right rounded border border-gray-300 bg-white py-1 shadow-md focus:outline-none dark:border-gray-700 dark:bg-gray-800"
         >
           <MenuItem v-slot="{ active }">
             <button
-              class="block w-full px-3 py-1.5 text-left" :class="active ? 'bg-gray-100' : ''"
+              class="block w-full px-3 py-1.5 text-left" :class="active ? 'bg-gray-100 dark:bg-gray-700' : ''"
               @click="run(() => Reveal(props.index))"
             >
               Open containing folder
@@ -106,7 +100,7 @@ async function run(action: () => Promise<void>) {
           </MenuItem>
           <MenuItem v-slot="{ active }">
             <button
-              class="block w-full px-3 py-1.5 text-left" :class="active ? 'bg-gray-100' : ''"
+              class="block w-full px-3 py-1.5 text-left" :class="active ? 'bg-gray-100 dark:bg-gray-700' : ''"
               @click="emit('rename')"
             >
               Rename
@@ -114,7 +108,7 @@ async function run(action: () => Promise<void>) {
           </MenuItem>
           <MenuItem v-slot="{ active }">
             <button
-              class="block w-full px-3 py-1.5 text-left" :class="active ? 'bg-gray-100' : ''"
+              class="block w-full px-3 py-1.5 text-left" :class="active ? 'bg-gray-100 dark:bg-gray-700' : ''"
               @click="run(() => ChangeIcon(props.index))"
             >
               Change icon
@@ -122,7 +116,7 @@ async function run(action: () => Promise<void>) {
           </MenuItem>
           <MenuItem v-slot="{ active }">
             <button
-              class="block w-full px-3 py-1.5 text-left" :class="active ? 'bg-gray-100' : ''"
+              class="block w-full px-3 py-1.5 text-left" :class="active ? 'bg-gray-100 dark:bg-gray-700' : ''"
               @click="run(() => UpdateIcon(props.index))"
             >
               Update icon
@@ -130,7 +124,7 @@ async function run(action: () => Promise<void>) {
           </MenuItem>
           <MenuItem v-slot="{ active }">
             <button
-              class="block w-full px-3 py-1.5 text-left" :class="active ? 'bg-gray-100' : ''"
+              class="block w-full px-3 py-1.5 text-left" :class="active ? 'bg-gray-100 dark:bg-gray-700' : ''"
               @click="emit('details')"
             >
               Details
@@ -138,7 +132,7 @@ async function run(action: () => Promise<void>) {
           </MenuItem>
           <MenuItem v-slot="{ active }">
             <button
-              class="block w-full px-3 py-1.5 text-left text-red-600" :class="active ? 'bg-gray-100' : ''"
+              class="block w-full px-3 py-1.5 text-left text-red-600 dark:text-red-400" :class="active ? 'bg-gray-100 dark:bg-gray-700' : ''"
               @click="emit('delete')"
             >
               Delete
