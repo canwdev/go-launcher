@@ -4,38 +4,9 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Go Launcher</title>
-  <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-  <header id="header">
-    <button id="addBtn">Add Files</button>
-    <span id="dropHint">Drop files anywhere to add them</span>
-  </header>
-  <main id="file-list"></main>
-  <div id="empty" class="hidden">No files added yet. Click "Add Files" or drop files anywhere.</div>
-
-  <div id="menu" class="hidden">
-    <button data-action="reveal">Open containing folder</button>
-    <button data-action="rename">Rename</button>
-    <button data-action="changeicon">Change icon</button>
-    <button data-action="updateicon">Update icon</button>
-    <button data-action="details">Details</button>
-    <button data-action="delete" class="danger">Delete</button>
-  </div>
-
-  <div id="modal" class="hidden">
-    <div id="modal-box">
-      <h3 id="modal-title">Rename</h3>
-      <input id="rename-input" type="text">
-      <textarea id="details-text" class="hidden" readonly></textarea>
-      <button id="copy-btn" class="hidden">Copy to Clipboard</button>
-      <div id="modal-actions">
-        <button id="modal-ok">OK</button>
-        <button id="modal-cancel">Cancel</button>
-      </div>
-    </div>
-  </div>
-
-  <script src="main.js"></script>
+  <div id="app"></div>
+  <script type="module" src="/src/main.ts"></script>
 </body>
 </html>

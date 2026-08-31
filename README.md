@@ -7,6 +7,7 @@ run/stop them, drag & drop to add more, and manage entries via a per-item menu.
 ## Requirements
 
 - Go 1.26 or later
+- [bun](https://bun.sh) (package manager for the frontend)
 - Wails CLI: `go install github.com/wailsapp/wails/v2/cmd/wails@latest`
 - **Windows**: WebView2 runtime (preinstalled on Windows 10/11). No C compiler needed.
 
@@ -15,6 +16,8 @@ run/stop them, drag & drop to add more, and manage entries via a per-item menu.
 ```sh
 wails dev
 ```
+
+This starts the Vite dev server and rebuilds/relaunches the app on changes.
 
 ## Build
 
@@ -28,9 +31,14 @@ The binary is produced at `build/bin/go-launcher.exe` and copied to `go-launcher
 
 ## Structure
 
-- `main.go` — Wails app bootstrap (`wails.Run`, embedded frontend assets)
+- `main.go` — Wails app bootstrap (`wails.Run`, embeds `frontend/dist`)
 - `app.go` — the `App` struct with the methods bound to the frontend (add/remove/rename, run/stop, icons, etc.) plus the launcher data persistence
-- `frontend/` — plain HTML + CSS + JS UI (no build step or framework)
+- `frontend/` — **Vite + Vue 3 + TypeScript + Tailwind CSS** frontend, managed with bun
+  - `src/api.ts` — typed wrappers around the generated `wailsjs` Go bindings
+  - `src/composables/useLauncher.ts` — reactive item list, Wails events & file drop
+  - `src/components/` — `LauncherRow`, `ContextMenu`, `ModalDialog`
+  - `eslint.config.mjs` — [@antfu/eslint-config](https://github.com/antfu/eslint-config)
+  - scripts: `bun run dev` / `build` / `typecheck` / `lint` / `lint:fix`
 - `utils.go`, `launch_*.go`, `icon_*.go` — platform helpers (path normalization, process launching, icon extraction)
 
 ## References

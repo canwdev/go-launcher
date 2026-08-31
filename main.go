@@ -2,7 +2,6 @@ package main
 
 import (
 	"embed"
-	"io/fs"
 	"log"
 
 	"github.com/wailsapp/wails/v2"
@@ -10,23 +9,18 @@ import (
 	"github.com/wailsapp/wails/v2/pkg/options/assetserver"
 )
 
-//go:embed all:frontend
+//go:embed all:frontend/dist
 var assets embed.FS
 
 func main() {
 	app := NewApp()
 
-	assetsFS, err := fs.Sub(assets, "frontend")
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	err = wails.Run(&options.App{
+	err := wails.Run(&options.App{
 		Title:  "Go Launcher",
 		Width:  640,
 		Height: 400,
 		AssetServer: &assetserver.Options{
-			Assets: assetsFS,
+			Assets: assets,
 		},
 		OnStartup:  app.startup,
 		OnShutdown: app.shutdown,
