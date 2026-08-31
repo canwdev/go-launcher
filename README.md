@@ -1,4 +1,4 @@
-# test-go-fyne
+# go-launcher
 
 A minimal [Fyne](https://fyne.io/) demo app for Go. It opens a window with a button; clicking the button prints `Hello!` to the console.
 

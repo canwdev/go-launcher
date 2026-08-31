@@ -9,7 +9,6 @@ import (
 	"image/png"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"time"
 
@@ -71,20 +70,6 @@ func absPath(p string) string {
 
 const iconsDir = "icons"
 
-func sanitizeBase(name string) string {
-	base := strings.Map(func(r rune) rune {
-		switch r {
-		case '<', '>', ':', '"', '/', '\\', '|', '?', '*':
-			return '_'
-		}
-		return r
-	}, name)
-	if len(base) > 40 {
-		base = base[:40]
-	}
-	return base
-}
-
 func saveImage(img image.Image, nameBase string) string {
 	if err := os.MkdirAll(filepath.Join(absBase, iconsDir), 0755); err != nil {
 		return ""
@@ -123,22 +108,6 @@ func (t *tapRow) DoubleTapped(_ *fyne.PointEvent) {
 	if t.onDouble != nil {
 		t.onDouble()
 	}
-}
-
-func normalizePath(path string) string {
-	if runtime.GOOS != "windows" {
-		return path
-	}
-	p := strings.ReplaceAll(path, "/", `\`)
-	if len(p) >= 3 && p[0] == '\\' && p[2] == ':' &&
-		((p[1] >= 'A' && p[1] <= 'Z') || (p[1] >= 'a' && p[1] <= 'z')) {
-		p = p[1:]
-	}
-	return p
-}
-
-func defaultTitle(path string) string {
-	return strings.TrimSuffix(filepath.Base(path), filepath.Ext(path))
 }
 
 func loadLauncherData() LauncherData {
@@ -223,39 +192,6 @@ func readDiskData() (LauncherData, bool) {
 
 func itemKey(item LauncherItem) string {
 	return filepath.Clean(absPath(normalizePath(item.Path)))
-}
-
-func formatRuntime(ms int64) string {
-	total := ms / 1000
-	d := total / 86400
-	h := (total % 86400) / 3600
-	m := (total % 3600) / 60
-	parts := make([]string, 0, 3)
-	if d > 0 {
-		parts = append(parts, fmt.Sprintf("%dd", d))
-	}
-	if h > 0 {
-		parts = append(parts, fmt.Sprintf("%dh", h))
-	}
-	if m > 0 {
-		parts = append(parts, fmt.Sprintf("%dm", m))
-	}
-	if len(parts) == 0 {
-		return "1m"
-	}
-	return strings.Join(parts, " ")
-}
-
-func isExecutable(path string) bool {
-	info, err := os.Stat(path)
-	if err != nil {
-		return false
-	}
-	if runtime.GOOS == "windows" {
-		ext := strings.ToLower(filepath.Ext(path))
-		return ext == ".exe" || ext == ".bat" || ext == ".cmd" || ext == ".com"
-	}
-	return info.Mode()&0111 != 0
 }
 
 func openFile(path string) error {
@@ -348,11 +284,16 @@ func main() {
 
 			if ld.LauncherFiles[id].Icon != "" {
 				iconImg.File = absPath(ld.LauncherFiles[id].Icon)
+				iconImg.Resource = nil
+				iconImg.Image = nil
 				iconImg.Hidden = false
 				iconImg.Refresh()
 			} else {
 				iconImg.File = ""
-				iconImg.Hidden = true
+				iconImg.Resource = nil
+				iconImg.Image = nil
+				iconImg.Hidden = false
+				iconImg.Refresh()
 			}
 
 			var displayed string
