@@ -13,7 +13,7 @@ import { showError } from '../utils'
 
 const props = defineProps<{
   open: boolean
-  index: number
+  guid: string
   mode: 'rename' | 'details'
   title: string
   initialName: string
@@ -27,7 +27,7 @@ const name = ref('')
 const details = ref('')
 
 watch(
-  () => [props.open, props.mode, props.index, props.initialName] as const,
+  () => [props.open, props.mode, props.guid, props.initialName] as const,
   async ([open, mode, , initialName]) => {
     if (!open)
       return
@@ -35,7 +35,7 @@ watch(
     details.value = ''
     if (mode === 'details') {
       try {
-        details.value = await Details(props.index)
+        details.value = await Details(props.guid)
       }
       catch (err) {
         showError(err)
@@ -47,7 +47,7 @@ watch(
 async function onOk() {
   if (props.mode === 'rename') {
     try {
-      await RenameItem(props.index, name.value)
+      await RenameItem(props.guid, name.value)
     }
     catch (err) {
       showError(err)

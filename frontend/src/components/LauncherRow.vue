@@ -13,7 +13,6 @@ import { formatRuntime, showError } from '../utils'
 
 const props = defineProps<{
   item: LauncherItem
-  index: number
   dragging?: boolean
   dragOver?: boolean
 }>()
@@ -33,9 +32,9 @@ const runtimeText = computed(() => formatRuntime(props.item.runtime_ms))
 async function onRun() {
   try {
     if (props.item.running)
-      await Stop(props.index)
+      await Stop(props.item.guid)
     else
-      await Launch(props.index)
+      await Launch(props.item.guid)
   }
   catch (err) {
     showError(err)
@@ -45,7 +44,7 @@ async function onRun() {
 function onDoubleClick() {
   if (props.item.running)
     return
-  Launch(props.index).catch(showError)
+  Launch(props.item.guid).catch(showError)
 }
 
 async function run(action: () => Promise<void>) {
@@ -93,7 +92,7 @@ async function run(action: () => Promise<void>) {
           <MenuItem v-slot="{ active }">
             <button
               class="block w-full px-3 py-1.5 text-left" :class="active ? 'bg-gray-100 dark:bg-gray-700' : ''"
-              @click="run(() => Reveal(props.index))"
+              @click="run(() => Reveal(props.item.guid))"
             >
               Open containing folder
             </button>
@@ -109,7 +108,7 @@ async function run(action: () => Promise<void>) {
           <MenuItem v-slot="{ active }">
             <button
               class="block w-full px-3 py-1.5 text-left" :class="active ? 'bg-gray-100 dark:bg-gray-700' : ''"
-              @click="run(() => ChangeIcon(props.index))"
+              @click="run(() => ChangeIcon(props.item.guid))"
             >
               Change icon
             </button>
@@ -117,7 +116,7 @@ async function run(action: () => Promise<void>) {
           <MenuItem v-slot="{ active }">
             <button
               class="block w-full px-3 py-1.5 text-left" :class="active ? 'bg-gray-100 dark:bg-gray-700' : ''"
-              @click="run(() => UpdateIcon(props.index))"
+              @click="run(() => UpdateIcon(props.item.guid))"
             >
               Update icon
             </button>

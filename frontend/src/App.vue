@@ -31,21 +31,21 @@ const modalOpen = ref(false)
 const modalMode = ref<'rename' | 'details'>('rename')
 const modalTitle = ref('Rename')
 const modalName = ref('')
-const activeId = ref(-1)
+const activeGuid = ref('')
 
 const confirmOpen = ref(false)
 const confirmMessage = ref('')
-const deleteId = ref(-1)
+const deleteGuid = ref('')
 
 const draggingIndex = ref<number | null>(null)
 const dragOverIndex = ref<number | null>(null)
 
-function openModal(mode: 'rename' | 'details', index: number) {
-  activeId.value = index
+function openModal(mode: 'rename' | 'details', guid: string) {
+  activeGuid.value = guid
   modalMode.value = mode
   modalTitle.value = mode === 'rename' ? 'Rename' : 'Details'
   if (mode === 'rename')
-    modalName.value = items.value[index]?.title ?? ''
+    modalName.value = items.value.find(i => i.guid === guid)?.title ?? ''
   modalOpen.value = true
 }
 
@@ -53,15 +53,15 @@ function closeModal() {
   modalOpen.value = false
 }
 
-function onDeleteRequested(index: number) {
-  deleteId.value = index
-  confirmMessage.value = `Delete "${items.value[index]?.title ?? ''}"?`
+function onDeleteRequested(guid: string) {
+  deleteGuid.value = guid
+  confirmMessage.value = `Delete "${items.value.find(i => i.guid === guid)?.title ?? ''}"?`
   confirmOpen.value = true
 }
 
 function onConfirmDelete() {
   confirmOpen.value = false
-  RemoveItem(deleteId.value).catch(showError)
+  RemoveItem(deleteGuid.value).catch(showError)
 }
 
 function onDragStart(index: number) {
@@ -155,16 +155,16 @@ function onAddFiles() {
         No files added yet. Click "Add Files" or drop files anywhere.
       </div>
       <LauncherRow
-        v-for="(item, index) in items" :key="index" :item="item" :index="index"
+        v-for="(item, index) in items" :key="item.guid" :item="item"
         :dragging="draggingIndex === index"
         :drag-over="dragOverIndex === index && draggingIndex !== null && draggingIndex !== index"
-        @rename="openModal('rename', index)" @details="openModal('details', index)" @delete="onDeleteRequested(index)"
+        @rename="openModal('rename', item.guid)" @details="openModal('details', item.guid)" @delete="onDeleteRequested(item.guid)"
         @dragstart="onDragStart(index)" @dragover="onDragOver(index)" @drop="onDrop(index)" @dragend="onDragEnd"
       />
     </main>
 
     <ModalDialog
-      :open="modalOpen" :index="activeId" :mode="modalMode" :title="modalTitle" :initial-name="modalName"
+      :open="modalOpen" :guid="activeGuid" :mode="modalMode" :title="modalTitle" :initial-name="modalName"
       @close="closeModal"
     />
 

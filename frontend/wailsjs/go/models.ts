@@ -1,6 +1,7 @@
 export namespace main {
 	
 	export class LauncherItemView {
+	    guid: string;
 	    title: string;
 	    iconURL: string;
 	    runtime_ms: number;
@@ -12,6 +13,7 @@ export namespace main {
 	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.guid = source["guid"];
 	        this.title = source["title"];
 	        this.iconURL = source["iconURL"];
 	        this.runtime_ms = source["runtime_ms"];

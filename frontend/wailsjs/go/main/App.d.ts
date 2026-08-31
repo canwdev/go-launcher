@@ -6,26 +6,26 @@ export function AddFiles():Promise<void>;
 
 export function AddPaths(arg1:Array<string>):Promise<void>;
 
-export function ChangeIcon(arg1:number):Promise<void>;
+export function ChangeIcon(arg1:string):Promise<void>;
 
-export function Details(arg1:number):Promise<string>;
+export function Details(arg1:string):Promise<string>;
 
 export function GetAutoMinimize():Promise<boolean>;
 
 export function GetItems():Promise<Array<main.LauncherItemView>>;
 
-export function Launch(arg1:number):Promise<void>;
+export function Launch(arg1:string):Promise<void>;
 
 export function MoveItem(arg1:number,arg2:number):Promise<void>;
 
-export function RemoveItem(arg1:number):Promise<void>;
+export function RemoveItem(arg1:string):Promise<void>;
 
-export function RenameItem(arg1:number,arg2:string):Promise<void>;
+export function RenameItem(arg1:string,arg2:string):Promise<void>;
 
-export function Reveal(arg1:number):Promise<void>;
+export function Reveal(arg1:string):Promise<void>;
 
 export function SetAutoMinimize(arg1:boolean):Promise<void>;
 
-export function Stop(arg1:number):Promise<void>;
+export function Stop(arg1:string):Promise<void>;
 
-export function UpdateIcon(arg1:number):Promise<void>;
+export function UpdateIcon(arg1:string):Promise<void>;
