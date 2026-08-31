@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -28,13 +27,27 @@ type LauncherData struct {
 }
 
 type runningProc struct {
-	cmd   *exec.Cmd
-	start time.Time
+	start   time.Time
+	wait    func() error
+	stop    func() error
+	cleanup func()
 }
 
-const saveFile = "go_launcher_data.json"
+const saveFile = "go-launcher-data.json"
 
 var running = map[string]*runningProc{}
+
+func normalizePath(path string) string {
+	if runtime.GOOS != "windows" {
+		return path
+	}
+	p := strings.ReplaceAll(path, "/", `\`)
+	if len(p) >= 3 && p[0] == '\\' && p[2] == ':' &&
+		((p[1] >= 'A' && p[1] <= 'Z') || (p[1] >= 'a' && p[1] <= 'z')) {
+		p = p[1:]
+	}
+	return p
+}
 
 func loadLauncherData() LauncherData {
 	data, err := os.ReadFile(saveFile)
@@ -44,6 +57,9 @@ func loadLauncherData() LauncherData {
 	var ld LauncherData
 	if err := json.Unmarshal(data, &ld); err != nil {
 		return LauncherData{}
+	}
+	for i := range ld.LauncherFiles {
+		ld.LauncherFiles[i].Path = normalizePath(ld.LauncherFiles[i].Path)
 	}
 	return ld
 }
@@ -86,17 +102,7 @@ func isExecutable(path string) bool {
 }
 
 func openFile(path string) error {
-	switch runtime.GOOS {
-	case "windows":
-		cmd := exec.Command("cmd", "/c", "start", "", `"`+path+`"`)
-		return cmd.Start()
-	case "darwin":
-		cmd := exec.Command("open", path)
-		return cmd.Start()
-	default:
-		cmd := exec.Command("xdg-open", path)
-		return cmd.Start()
-	}
+	return openWithDefaultHandler(path)
 }
 
 func main() {
@@ -108,14 +114,13 @@ func main() {
 	var fileList *widget.List
 
 	startProcess := func(path string) error {
-		cmd := exec.Command(path)
-		if err := cmd.Start(); err != nil {
+		p := &runningProc{}
+		if err := startTracked(path, p); err != nil {
 			return err
 		}
-		p := &runningProc{cmd: cmd, start: time.Now()}
 		running[path] = p
 		go func() {
-			_ = cmd.Wait()
+			p.wait()
 			elapsed := time.Since(p.start).Milliseconds()
 			fyne.Do(func() {
 				for i := range ld.LauncherFiles {
@@ -125,6 +130,9 @@ func main() {
 					}
 				}
 				delete(running, path)
+				if p.cleanup != nil {
+					p.cleanup()
+				}
 				saveLauncherData(ld)
 				fileList.Refresh()
 			})
@@ -133,8 +141,10 @@ func main() {
 	}
 
 	stopProcess := func(path string) {
-		if p, ok := running[path]; ok {
-			_ = p.cmd.Process.Kill()
+		if p, ok := running[path]; ok && p.stop != nil {
+			if err := p.stop(); err != nil {
+				dialog.ShowError(err, w)
+			}
 		}
 	}
 
@@ -157,9 +167,11 @@ func main() {
 
 			name.SetText(filepath.Base(path))
 
-			displayed := formatRuntime(ld.LauncherFiles[id].RuntimeMs)
+			var displayed string
 			if p, ok := running[path]; ok {
 				displayed = formatRuntime(ld.LauncherFiles[id].RuntimeMs + time.Since(p.start).Milliseconds())
+			} else if ld.LauncherFiles[id].RuntimeMs > 0 {
+				displayed = formatRuntime(ld.LauncherFiles[id].RuntimeMs)
 			}
 			runtimeLabel.SetText(displayed)
 
@@ -221,7 +233,7 @@ func main() {
 				return
 			}
 			defer reader.Close()
-			path := reader.URI().Path()
+			path := normalizePath(reader.URI().Path())
 			for _, item := range ld.LauncherFiles {
 				if item.Path == path {
 					dialog.ShowInformation("Notice", "File is already in the list", w)
