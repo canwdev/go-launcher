@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"image/png"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -11,6 +12,7 @@ import (
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/app"
+	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/dialog"
 	"fyne.io/fyne/v2/layout"
@@ -21,6 +23,7 @@ type LauncherItem struct {
 	Path      string `json:"path"`
 	Title     string `json:"title"`
 	RuntimeMs int64  `json:"runtime_ms"`
+	Icon      string `json:"icon,omitempty"`
 }
 
 type LauncherData struct {
@@ -53,6 +56,39 @@ func absPath(p string) string {
 		return p
 	}
 	return filepath.Join(absBase, p)
+}
+
+const iconsDir = "icons"
+
+func writeIcon(path string) string {
+	img, err := iconForFile(path)
+	if err != nil {
+		return ""
+	}
+	if err := os.MkdirAll(filepath.Join(absBase, iconsDir), 0755); err != nil {
+		return ""
+	}
+	base := strings.Map(func(r rune) rune {
+		switch r {
+		case '<', '>', ':', '"', '/', '\\', '|', '?', '*':
+			return '_'
+		}
+		return r
+	}, filepath.Base(path))
+	if len(base) > 40 {
+		base = base[:40]
+	}
+	name := fmt.Sprintf("%s-%d.png", base, time.Now().UnixNano())
+	abs := filepath.Join(absBase, iconsDir, name)
+	f, err := os.Create(abs)
+	if err != nil {
+		return ""
+	}
+	defer f.Close()
+	if err := png.Encode(f, img); err != nil {
+		return ""
+	}
+	return "./" + filepath.ToSlash(filepath.Join(iconsDir, name))
 }
 
 type tapRow struct {
@@ -201,26 +237,39 @@ func main() {
 	fileList = widget.NewList(
 		func() int { return len(ld.LauncherFiles) },
 		func() fyne.CanvasObject {
+			iconImg := canvas.NewImageFromFile("")
+			iconImg.SetMinSize(fyne.NewSize(24, 24))
+			iconImg.FillMode = canvas.ImageFillContain
 			name := widget.NewLabel("placeholder")
 			runtime := widget.NewLabel("")
 			runBtn := widget.NewButton("Run", nil)
 			delBtn := widget.NewButton("Delete", nil)
-			return &tapRow{CanvasObject: container.NewHBox(name, layout.NewSpacer(), runtime, runBtn, delBtn)}
+			return &tapRow{CanvasObject: container.NewHBox(iconImg, name, layout.NewSpacer(), runtime, runBtn, delBtn)}
 		},
 		func(id widget.ListItemID, obj fyne.CanvasObject) {
 			path := absPath(ld.LauncherFiles[id].Path)
 			row := obj.(*tapRow)
 			box := row.CanvasObject.(*fyne.Container)
-			name := box.Objects[0].(*widget.Label)
-			runtimeLabel := box.Objects[2].(*widget.Label)
-			runBtn := box.Objects[3].(*widget.Button)
-			delBtn := box.Objects[4].(*widget.Button)
+			iconImg := box.Objects[0].(*canvas.Image)
+			name := box.Objects[1].(*widget.Label)
+			runtimeLabel := box.Objects[3].(*widget.Label)
+			runBtn := box.Objects[4].(*widget.Button)
+			delBtn := box.Objects[5].(*widget.Button)
 
 			title := ld.LauncherFiles[id].Title
 			if title == "" {
 				title = filepath.Base(path)
 			}
 			name.SetText(title)
+
+			if ld.LauncherFiles[id].Icon != "" {
+				iconImg.File = absPath(ld.LauncherFiles[id].Icon)
+				iconImg.Hidden = false
+				iconImg.Refresh()
+			} else {
+				iconImg.File = ""
+				iconImg.Hidden = true
+			}
 
 			var displayed string
 			if p, ok := running[path]; ok {
@@ -270,6 +319,9 @@ func main() {
 							return
 						}
 						stopProcess(path)
+						if item := ld.LauncherFiles[id]; item.Icon != "" {
+							_ = os.Remove(absPath(item.Icon))
+						}
 						newItems := make([]LauncherItem, 0, len(ld.LauncherFiles)-1)
 						for i, item := range ld.LauncherFiles {
 							if i != id {
@@ -309,7 +361,7 @@ func main() {
 					return
 				}
 			}
-			ld.LauncherFiles = append(ld.LauncherFiles, LauncherItem{Path: toStoredPath(path), Title: filepath.Base(path)})
+			ld.LauncherFiles = append(ld.LauncherFiles, LauncherItem{Path: toStoredPath(path), Title: filepath.Base(path), Icon: writeIcon(path)})
 			saveLauncherData(ld)
 			fileList.Refresh()
 		}, w)
@@ -339,7 +391,7 @@ func main() {
 			if dup {
 				continue
 			}
-			ld.LauncherFiles = append(ld.LauncherFiles, LauncherItem{Path: toStoredPath(path), Title: filepath.Base(path)})
+			ld.LauncherFiles = append(ld.LauncherFiles, LauncherItem{Path: toStoredPath(path), Title: filepath.Base(path), Icon: writeIcon(path)})
 			added = true
 		}
 		if added {
