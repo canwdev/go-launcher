@@ -1,0 +1,16 @@
+{
+  "launcher_files": [
+    {
+      "path": "D:/Programs/KeePassXC/KeePassXC.exe",
+      "runtime_ms": 45627
+    },
+    {
+      "path": "D:/Programs/Dism++/Dism++x64.exe",
+      "runtime_ms": 0
+    },
+    {
+      "path": "D:/Downloads/20260812-171225.jpg",
+      "runtime_ms": 0
+    }
+  ]
+}
