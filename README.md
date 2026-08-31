@@ -1,6 +1,8 @@
 # go-launcher
 
-A minimal [Wails](https://wails.io/) desktop launcher demo app for Go. It opens a
+![](docs/2026-08-31_165034.png)
+
+A minimal [Wails](https://wails.io/) desktop launcher app for Go. It opens a
 window listing files/programs (with icons and accumulated runtime), letting you
 run/stop them, drag & drop to add more, and manage entries via a per-item menu.
 
