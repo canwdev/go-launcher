@@ -3,6 +3,7 @@
 package main
 
 import (
+	"errors"
 	"syscall"
 	"time"
 	"unsafe"
@@ -69,6 +70,9 @@ func openWithDefaultHandler(path string) error {
 func startTracked(path string, proc *runningProc) error {
 	h, err := shellExecuteEx("open", path)
 	if err != nil {
+		if errors.Is(err, syscall.Errno(1223)) || errors.Is(err, syscall.Errno(5)) {
+			return err
+		}
 		h, err = shellExecuteEx("runas", path)
 		if err != nil {
 			return err

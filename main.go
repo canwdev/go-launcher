@@ -19,6 +19,7 @@ import (
 
 type LauncherItem struct {
 	Path      string `json:"path"`
+	Title     string `json:"title"`
 	RuntimeMs int64  `json:"runtime_ms"`
 }
 
@@ -54,6 +55,21 @@ func absPath(p string) string {
 	return filepath.Join(absBase, p)
 }
 
+type tapRow struct {
+	fyne.CanvasObject
+	onDouble func()
+}
+
+func (t *tapRow) CreateRenderer() fyne.WidgetRenderer {
+	return widget.NewSimpleRenderer(t.CanvasObject)
+}
+
+func (t *tapRow) DoubleTapped(_ *fyne.PointEvent) {
+	if t.onDouble != nil {
+		t.onDouble()
+	}
+}
+
 func normalizePath(path string) string {
 	if runtime.GOOS != "windows" {
 		return path
@@ -77,6 +93,9 @@ func loadLauncherData() LauncherData {
 	}
 	for i := range ld.LauncherFiles {
 		ld.LauncherFiles[i].Path = normalizePath(ld.LauncherFiles[i].Path)
+		if ld.LauncherFiles[i].Title == "" {
+			ld.LauncherFiles[i].Title = filepath.Base(absPath(ld.LauncherFiles[i].Path))
+		}
 	}
 	return ld
 }
@@ -129,6 +148,19 @@ func main() {
 
 	ld := loadLauncherData()
 
+	w.SetCloseIntercept(func() {
+		for path, p := range running {
+			for i := range ld.LauncherFiles {
+				if absPath(ld.LauncherFiles[i].Path) == path {
+					ld.LauncherFiles[i].RuntimeMs += time.Since(p.start).Milliseconds()
+					break
+				}
+			}
+		}
+		saveLauncherData(ld)
+		w.Close()
+	})
+
 	var fileList *widget.List
 
 	startProcess := func(path string) error {
@@ -173,17 +205,22 @@ func main() {
 			runtime := widget.NewLabel("")
 			runBtn := widget.NewButton("Run", nil)
 			delBtn := widget.NewButton("Delete", nil)
-			return container.NewHBox(name, layout.NewSpacer(), runtime, runBtn, delBtn)
+			return &tapRow{CanvasObject: container.NewHBox(name, layout.NewSpacer(), runtime, runBtn, delBtn)}
 		},
 		func(id widget.ListItemID, obj fyne.CanvasObject) {
 			path := absPath(ld.LauncherFiles[id].Path)
-			box := obj.(*fyne.Container)
+			row := obj.(*tapRow)
+			box := row.CanvasObject.(*fyne.Container)
 			name := box.Objects[0].(*widget.Label)
 			runtimeLabel := box.Objects[2].(*widget.Label)
 			runBtn := box.Objects[3].(*widget.Button)
 			delBtn := box.Objects[4].(*widget.Button)
 
-			name.SetText(filepath.Base(path))
+			title := ld.LauncherFiles[id].Title
+			if title == "" {
+				title = filepath.Base(path)
+			}
+			name.SetText(title)
 
 			var displayed string
 			if p, ok := running[path]; ok {
@@ -193,27 +230,36 @@ func main() {
 			}
 			runtimeLabel.SetText(displayed)
 
+			launch := func() {
+				if isExecutable(path) {
+					if err := startProcess(path); err != nil {
+						dialog.ShowError(err, w)
+						return
+					}
+					fileList.Refresh()
+				} else if err := openFile(path); err != nil {
+					dialog.ShowError(err, w)
+				}
+			}
+
 			if _, ok := running[path]; ok {
-				runBtn.SetText("Stop")
 				runBtn.Importance = widget.DangerImportance
+				runBtn.SetText("Stop")
 				runBtn.OnTapped = func() {
 					stopProcess(path)
 					fileList.Refresh()
 				}
 			} else {
-				runBtn.SetText("Run")
 				runBtn.Importance = widget.MediumImportance
-				runBtn.OnTapped = func() {
-					if isExecutable(path) {
-						if err := startProcess(path); err != nil {
-							dialog.ShowError(err, w)
-							return
-						}
-						fileList.Refresh()
-					} else if err := openFile(path); err != nil {
-						dialog.ShowError(err, w)
-					}
+				runBtn.SetText("Run")
+				runBtn.OnTapped = launch
+			}
+
+			row.onDouble = func() {
+				if _, ok := running[path]; ok {
+					return
 				}
+				launch()
 			}
 
 			delBtn.OnTapped = func() {
@@ -239,7 +285,7 @@ func main() {
 	)
 
 	go func() {
-		tick := time.NewTicker(time.Minute)
+		tick := time.NewTicker(30 * time.Second)
 		defer tick.Stop()
 		for range tick.C {
 			fyne.Do(func() { fileList.Refresh() })
@@ -263,7 +309,7 @@ func main() {
 					return
 				}
 			}
-			ld.LauncherFiles = append(ld.LauncherFiles, LauncherItem{Path: toStoredPath(path)})
+			ld.LauncherFiles = append(ld.LauncherFiles, LauncherItem{Path: toStoredPath(path), Title: filepath.Base(path)})
 			saveLauncherData(ld)
 			fileList.Refresh()
 		}, w)
@@ -275,6 +321,33 @@ func main() {
 		fileList,
 	)
 	w.SetContent(content)
+
+	w.SetOnDropped(func(_ fyne.Position, uris []fyne.URI) {
+		added := false
+		for _, uri := range uris {
+			path := normalizePath(uri.Path())
+			if path == "" {
+				continue
+			}
+			dup := false
+			for _, item := range ld.LauncherFiles {
+				if absPath(item.Path) == path {
+					dup = true
+					break
+				}
+			}
+			if dup {
+				continue
+			}
+			ld.LauncherFiles = append(ld.LauncherFiles, LauncherItem{Path: toStoredPath(path), Title: filepath.Base(path)})
+			added = true
+		}
+		if added {
+			saveLauncherData(ld)
+			fileList.Refresh()
+		}
+	})
+
 	w.Resize(fyne.NewSize(640, 400))
 	w.ShowAndRun()
 }
