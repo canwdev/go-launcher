@@ -1,67 +1,105 @@
 <script setup lang="ts">
-import type { Theme } from './composables/useTheme'
-import {
-  Menu,
-  MenuButton,
-  MenuItem,
-  MenuItems,
-  TransitionRoot,
-} from '@headlessui/vue'
-import { ref } from 'vue'
-import { AddFiles, MoveItem, RemoveItem } from './api'
+import type { AppItem } from './api'
+import { Menu, MenuButton, MenuItem, MenuItems, TransitionRoot } from '@headlessui/vue'
+import { computed, ref } from 'vue'
 import ConfirmDialog from './components/ConfirmDialog.vue'
 import LauncherRow from './components/LauncherRow.vue'
 import ModalDialog from './components/ModalDialog.vue'
-import { useAutoMinimize } from './composables/useAutoMinimize'
-import { useLauncher } from './composables/useLauncher'
+import TabBar from './components/TabBar.vue'
+import { useStore } from './composables/useStore'
 import { useTheme } from './composables/useTheme'
 import { showError } from './utils'
 
-const { items } = useLauncher()
-const { autoMinimize, toggle: toggleAutoMinimize } = useAutoMinimize()
+const { activeTab, store, addFilesInto, addTab, renameItem, removeItem, setActiveTab, moveTab, renameTab, removeTab, updateItemIcon, save } = useStore()
 const { theme, setTheme } = useTheme()
 
-const themeOptions: { value: Theme, label: string }[] = [
+const themeOptions = [
   { value: 'auto', label: 'Auto' },
   { value: 'light', label: 'Light' },
   { value: 'dark', label: 'Dark' },
-]
+] as const
 
-const modalOpen = ref(false)
-const modalMode = ref<'rename' | 'details'>('rename')
-const modalTitle = ref('Rename')
-const modalName = ref('')
-const activeGuid = ref('')
-
-const confirmOpen = ref(false)
-const confirmMessage = ref('')
-const deleteGuid = ref('')
+const rows = computed<{ item: AppItem, index: number }[]>(() => {
+  const tab = activeTab.value
+  if (!tab)
+    return []
+  return tab.slots
+    .map((slot, index) => ({ item: slot, index }))
+    .filter(x => x.item !== null) as { item: AppItem, index: number }[]
+})
 
 const draggingIndex = ref<number | null>(null)
 const dragOverIndex = ref<number | null>(null)
 
-function openModal(mode: 'rename' | 'details', guid: string) {
-  activeGuid.value = guid
-  modalMode.value = mode
-  modalTitle.value = mode === 'rename' ? 'Rename' : 'Details'
-  if (mode === 'rename')
-    modalName.value = items.value.find(i => i.guid === guid)?.title ?? ''
+const modalOpen = ref(false)
+const modalMode = ref<'rename' | 'details'>('rename')
+const modalTitle = ref('')
+const modalInitialName = ref('')
+const modalDetails = ref('')
+type ModalTarget = { kind: 'item', guid: string } | { kind: 'tab', guid: string }
+const modalTarget = ref<ModalTarget | null>(null)
+
+const confirmOpen = ref(false)
+const confirmMessage = ref('')
+const confirmAction = ref<null | (() => void)>(null)
+
+function openItemDetails(item: AppItem) {
+  modalMode.value = 'details'
+  modalTitle.value = item.name
+  modalDetails.value = JSON.stringify(item, null, 2)
   modalOpen.value = true
 }
 
-function closeModal() {
-  modalOpen.value = false
+function openItemRename(item: AppItem) {
+  modalMode.value = 'rename'
+  modalTitle.value = 'Rename'
+  modalInitialName.value = item.name
+  modalTarget.value = { kind: 'item', guid: item.guid }
+  modalOpen.value = true
 }
 
-function onDeleteRequested(guid: string) {
-  deleteGuid.value = guid
-  confirmMessage.value = `Delete "${items.value.find(i => i.guid === guid)?.title ?? ''}"?`
+function openTabRename(guid: string, name: string) {
+  modalMode.value = 'rename'
+  modalTitle.value = 'Rename Tab'
+  modalInitialName.value = name
+  modalTarget.value = { kind: 'tab', guid }
+  modalOpen.value = true
+}
+
+function onModalOk(name: string) {
+  if (!name)
+    return
+  const target = modalTarget.value
+  if (!target)
+    return
+  if (target.kind === 'item') {
+    renameItem(target.guid, name).catch(showError)
+  }
+  else {
+    renameTab(target.guid, name).catch(showError)
+  }
+}
+
+function onDeleteRequested(item: AppItem) {
+  confirmMessage.value = `Delete "${item.name}"?`
+  confirmAction.value = () => removeItem(item.guid).catch(showError)
   confirmOpen.value = true
 }
 
-function onConfirmDelete() {
+function onDeleteTabRequested(guid: string, name: string) {
+  confirmMessage.value = `Delete tab "${name}"?`
+  confirmAction.value = () => removeTab(guid).catch(showError)
+  confirmOpen.value = true
+}
+
+function onConfirm() {
   confirmOpen.value = false
-  RemoveItem(deleteGuid.value).catch(showError)
+  confirmAction.value?.()
+  confirmAction.value = null
+}
+
+function onIconDone(icon: string, item: AppItem) {
+  updateItemIcon(item.guid, icon).catch(showError)
 }
 
 function onDragStart(index: number) {
@@ -74,8 +112,16 @@ function onDragOver(index: number) {
 }
 
 function onDrop(target: number) {
-  if (draggingIndex.value !== null && draggingIndex.value !== target)
-    MoveItem(draggingIndex.value, target).catch(showError)
+  if (draggingIndex.value !== null && draggingIndex.value !== target) {
+    const tab = activeTab.value
+    if (!tab)
+      return
+    const list = rows.value
+    const [moved] = list.splice(draggingIndex.value, 1)
+    list.splice(target, 0, moved)
+    tab.slots = list.map(x => x.item)
+    save()
+  }
   draggingIndex.value = null
   dragOverIndex.value = null
 }
@@ -86,7 +132,7 @@ function onDragEnd() {
 }
 
 function onAddFiles() {
-  AddFiles().catch(showError)
+  addFilesInto().catch(showError)
 }
 </script>
 
@@ -107,22 +153,20 @@ function onAddFiles() {
         </MenuButton>
         <TransitionRoot
           enter="transition duration-100 ease-out" enter-from="opacity-0 scale-95"
-          enter-to="opacity-100 scale-100" leave="transition duration-75 ease-in" leave-from="opacity-100 scale-100"
-          leave-to="opacity-0 scale-95"
+          enter-to="opacity-100 scale-100" leave="transition duration-75 ease-in"
+          leave-from="opacity-100 scale-100" leave-to="opacity-0 scale-95"
         >
-          <MenuItems
-            class="absolute right-0 z-10 mt-1 w-56 origin-top-right rounded border border-gray-300 bg-white py-1 shadow-md focus:outline-none dark:border-gray-700 dark:bg-gray-800"
-          >
+          <MenuItems class="absolute right-0 z-10 mt-1 w-56 origin-top-right rounded border border-gray-300 bg-white py-1 shadow-md focus:outline-none dark:border-gray-700 dark:bg-gray-800">
             <MenuItem v-slot="{ active }">
               <button
                 class="flex w-full items-center gap-2 px-3 py-1.5 text-left" :class="active ? 'bg-gray-100 dark:bg-gray-700' : ''"
-                @click="toggleAutoMinimize"
+                @click="store.settings.auto_minimize = !store.settings.auto_minimize; save()"
               >
                 <span
                   class="inline-flex h-4 w-4 shrink-0 items-center justify-center rounded border text-xs"
-                  :class="autoMinimize ? 'border-blue-500 bg-blue-500 text-white' : 'border-gray-400 bg-white dark:border-gray-500 dark:bg-gray-700'"
+                  :class="store.settings.auto_minimize ? 'border-blue-500 bg-blue-500 text-white' : 'border-gray-400 bg-white dark:border-gray-500 dark:bg-gray-700'"
                 >
-                  <span v-if="autoMinimize">✓</span>
+                  <span v-if="store.settings.auto_minimize">✓</span>
                 </span>
                 Auto-minimize window
               </button>
@@ -150,26 +194,38 @@ function onAddFiles() {
       </Menu>
     </header>
 
+    <TabBar
+      :tabs="store.tabs"
+      :active-guid="store.active_tab_guid"
+      @add="addTab().catch(showError)"
+      @select="setActiveTab"
+      @rename="openTabRename"
+      @remove="onDeleteTabRequested"
+      @reorder="moveTab"
+    />
+
     <main class="flex-1 overflow-y-auto p-2">
-      <div v-if="items.length === 0" class="p-5 text-center text-gray-500 dark:text-gray-400">
-        No files added yet. Click "Add Files" or drop files anywhere.
+      <div v-if="rows.length === 0" class="p-5 text-center text-gray-500 dark:text-gray-400">
+        No files added yet. Click "Add Files" or drop files anywhere.{{ activeTab ? ` (tab: ${activeTab.name})` : '' }}
       </div>
       <LauncherRow
-        v-for="(item, index) in items" :key="item.guid" :item="item"
+        v-for="(row, index) in rows" :key="row.item.guid" :item="row.item"
         :dragging="draggingIndex === index"
         :drag-over="dragOverIndex === index && draggingIndex !== null && draggingIndex !== index"
-        @rename="openModal('rename', item.guid)" @details="openModal('details', item.guid)" @delete="onDeleteRequested(item.guid)"
+        @rename="openItemRename(row.item)" @details="openItemDetails(row.item)"
+        @delete="onDeleteRequested(row.item)"
+        @icondone="icon => onIconDone(icon, row.item)"
         @dragstart="onDragStart(index)" @dragover="onDragOver(index)" @drop="onDrop(index)" @dragend="onDragEnd"
       />
     </main>
 
     <ModalDialog
-      :open="modalOpen" :guid="activeGuid" :mode="modalMode" :title="modalTitle" :initial-name="modalName"
-      @close="closeModal"
+      :open="modalOpen" :mode="modalMode" :title="modalTitle" :initial-name="modalInitialName"
+      :details-text="modalDetails" @ok="onModalOk" @close="modalOpen = false"
     />
 
     <ConfirmDialog
-      :open="confirmOpen" title="Confirm Delete" :message="confirmMessage" @confirm="onConfirmDelete"
+      :open="confirmOpen" title="Confirm" :message="confirmMessage" @confirm="onConfirm"
       @close="confirmOpen = false"
     />
   </div>

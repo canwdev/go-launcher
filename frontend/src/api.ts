@@ -3,34 +3,26 @@ import {
   AddFiles,
   AddPaths,
   ChangeIcon,
-  Details,
-  GetAutoMinimize,
-  GetItems,
+  GetData,
   Launch,
-  MoveItem,
-  RemoveItem,
-  RenameItem,
   Reveal,
-  SetAutoMinimize,
+  SaveData,
   Stop,
   UpdateIcon,
 } from '../wailsjs/go/main/App'
 
-export type LauncherItem = main.LauncherItemView
+export type AppItem = main.AppItem
+export type Tab = main.Tab
+export type AppStore = main.AppStore
 
 export {
   AddFiles,
   AddPaths,
   ChangeIcon,
-  Details,
-  GetAutoMinimize,
-  GetItems,
+  GetData,
   Launch,
-  MoveItem,
-  RemoveItem,
-  RenameItem,
   Reveal,
-  SetAutoMinimize,
+  SaveData,
   Stop,
   UpdateIcon,
 }

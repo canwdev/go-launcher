@@ -11,7 +11,6 @@ import (
 	"image/png"
 	"os"
 	"path/filepath"
-	"strings"
 	"sync"
 	"time"
 
@@ -21,29 +20,33 @@ import (
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
-type LauncherItem struct {
-	GUID      string `json:"guid"`
-	Path      string `json:"path"`
-	Title     string `json:"title"`
-	RuntimeMs int64  `json:"runtime_ms"`
-	Icon      string `json:"icon,omitempty"`
+type AppItem struct {
+	GUID       string `json:"guid"`
+	Name       string `json:"name"`
+	Path       string `json:"path"`
+	Icon       string `json:"icon,omitempty"`
+	RuntimeMs  int64  `json:"runtime_ms,omitempty"`
+	Args       string `json:"args,omitempty"`
+	WorkingDir string `json:"working_dir,omitempty"`
+	IconURL    string `json:"iconURL,omitempty"`
+	Running    bool   `json:"running,omitempty"`
 }
 
-type LauncherData struct {
-	LauncherFiles []LauncherItem `json:"launcher_files"`
-	Settings      Settings       `json:"settings"`
+type Tab struct {
+	GUID  string     `json:"guid"`
+	Name  string     `json:"name"`
+	Slots []*AppItem `json:"slots"`
 }
 
 type Settings struct {
 	AutoMinimize bool `json:"auto_minimize"`
 }
 
-type LauncherItemView struct {
-	GUID      string `json:"guid"`
-	Title     string `json:"title"`
-	IconURL   string `json:"iconURL"`
-	RuntimeMs int64  `json:"runtime_ms"`
-	Running   bool   `json:"running"`
+type AppStore struct {
+	Version       string   `json:"version"`
+	ActiveTabGUID string   `json:"active_tab_guid"`
+	Tabs          []Tab    `json:"tabs"`
+	Settings      Settings `json:"settings"`
 }
 
 type runningProc struct {
@@ -99,36 +102,85 @@ func writeIcon(path string) string {
 	return saveImage(img, filepath.Base(path))
 }
 
-func loadLauncherData() LauncherData {
+func defaultStore() AppStore {
+	return AppStore{
+		Version: "1",
+		Tabs: []Tab{
+			{GUID: uuid.NewString(), Name: "Default", Slots: []*AppItem{}},
+		},
+		Settings: Settings{AutoMinimize: true},
+	}
+}
+
+func loadStore() AppStore {
 	data, err := os.ReadFile(saveFile)
 	if err != nil {
-		return LauncherData{Settings: Settings{AutoMinimize: true}}
+		return defaultStore()
 	}
-	var ld LauncherData
-	if err := json.Unmarshal(data, &ld); err != nil {
-		return LauncherData{Settings: Settings{AutoMinimize: true}}
+	var store AppStore
+	if err := json.Unmarshal(data, &store); err != nil {
+		return defaultStore()
 	}
-	for i := range ld.LauncherFiles {
-		ld.LauncherFiles[i].Path = normalizePath(ld.LauncherFiles[i].Path)
-		if ld.LauncherFiles[i].GUID == "" {
-			ld.LauncherFiles[i].GUID = uuid.NewString()
+	if store.Version == "" {
+		store.Version = "1"
+	}
+	if len(store.Tabs) == 0 {
+		store.Tabs = []Tab{{GUID: uuid.NewString(), Name: "Default", Slots: []*AppItem{}}}
+	}
+	for i := range store.Tabs {
+		if store.Tabs[i].GUID == "" {
+			store.Tabs[i].GUID = uuid.NewString()
 		}
-		if ld.LauncherFiles[i].Title == "" {
-			ld.LauncherFiles[i].Title = defaultTitle(absPath(ld.LauncherFiles[i].Path))
+		if store.Tabs[i].Name == "" {
+			store.Tabs[i].Name = "Tab"
+		}
+		if store.Tabs[i].Slots == nil {
+			store.Tabs[i].Slots = []*AppItem{}
+		}
+		for j := range store.Tabs[i].Slots {
+			slot := store.Tabs[i].Slots[j]
+			if slot == nil {
+				continue
+			}
+			slot.Path = normalizePath(slot.Path)
+			if slot.GUID == "" {
+				slot.GUID = uuid.NewString()
+			}
+			if slot.Name == "" {
+				slot.Name = defaultTitle(absPath(slot.Path))
+			}
 		}
 	}
-	return ld
+	return store
 }
 
-func writeLauncherData(ld LauncherData) {
-	data, _ := json.MarshalIndent(ld, "", "  ")
-	_ = os.WriteFile(saveFile, data, 0644)
+func writeStoreAtomic(store AppStore) error {
+	data, err := json.MarshalIndent(store, "", "  ")
+	if err != nil {
+		return err
+	}
+	tmp := saveFile + ".tmp"
+	if err := os.WriteFile(tmp, data, 0644); err != nil {
+		return err
+	}
+	return os.Rename(tmp, saveFile)
 }
 
-func (a *App) findItem(guid string) *LauncherItem {
-	for i := range a.ld.LauncherFiles {
-		if a.ld.LauncherFiles[i].GUID == guid {
-			return &a.ld.LauncherFiles[i]
+func (a *App) findItem(guid string) *AppItem {
+	for i := range a.store.Tabs {
+		for _, slot := range a.store.Tabs[i].Slots {
+			if slot != nil && slot.GUID == guid {
+				return slot
+			}
+		}
+	}
+	return nil
+}
+
+func (a *App) findTab(guid string) *Tab {
+	for i := range a.store.Tabs {
+		if a.store.Tabs[i].GUID == guid {
+			return &a.store.Tabs[i]
 		}
 	}
 	return nil
@@ -139,26 +191,25 @@ func openFile(path string) error {
 }
 
 type App struct {
-	ctx       context.Context
-	mu        sync.Mutex
-	ld        LauncherData
-	running   map[string]*runningProc
-	iconCache map[string]string
+	ctx          context.Context
+	mu           sync.Mutex
+	store        AppStore
+	runtimeStats map[string]int64
+	running      map[string]*runningProc
+	iconCache    map[string]string
 }
 
 func NewApp() *App {
 	return &App{
-		ld:        loadLauncherData(),
-		running:   map[string]*runningProc{},
-		iconCache: map[string]string{},
+		store:        loadStore(),
+		runtimeStats: map[string]int64{},
+		running:      map[string]*runningProc{},
+		iconCache:    map[string]string{},
 	}
 }
 
 func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
-	runtime.OnFileDrop(ctx, func(_x, _y int, paths []string) {
-		_ = a.AddPaths(paths)
-	})
 	go func() {
 		tick := time.NewTicker(30 * time.Second)
 		defer tick.Stop()
@@ -171,15 +222,8 @@ func (a *App) startup(ctx context.Context) {
 func (a *App) shutdown(_ context.Context) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	for path, p := range a.running {
-		for i := range a.ld.LauncherFiles {
-			if absPath(a.ld.LauncherFiles[i].Path) == path {
-				a.ld.LauncherFiles[i].RuntimeMs += time.Since(p.start).Milliseconds()
-				break
-			}
-		}
-	}
-	a.saveLauncherData()
+	a.injectRuntime()
+	a.writeStore()
 }
 
 func (a *App) emitUpdated() {
@@ -187,10 +231,6 @@ func (a *App) emitUpdated() {
 		return
 	}
 	runtime.EventsEmit(a.ctx, "items:updated")
-}
-
-func (a *App) saveLauncherData() {
-	writeLauncherData(a.ld)
 }
 
 func (a *App) iconURL(rel string) string {
@@ -209,140 +249,74 @@ func (a *App) iconURL(rel string) string {
 	return url
 }
 
-func (a *App) GetItems() []LauncherItemView {
+func (a *App) injectRuntime() {
+	for i := range a.store.Tabs {
+		for _, slot := range a.store.Tabs[i].Slots {
+			if slot == nil {
+				continue
+			}
+			slot.IconURL = a.iconURL(slot.Icon)
+			slot.Running = false
+			slot.RuntimeMs = a.runtimeStats[slot.GUID]
+			if p, ok := a.running[slot.GUID]; ok {
+				slot.Running = true
+				slot.RuntimeMs += time.Since(p.start).Milliseconds()
+			}
+		}
+	}
+}
+
+func (a *App) clearTransient() {
+	for i := range a.store.Tabs {
+		for _, slot := range a.store.Tabs[i].Slots {
+			if slot == nil {
+				continue
+			}
+			slot.IconURL = ""
+			slot.Running = false
+		}
+	}
+}
+
+func (a *App) writeStore() {
+	_ = writeStoreAtomic(a.store)
+}
+
+func (a *App) GetData() AppStore {
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	items := make([]LauncherItemView, 0, len(a.ld.LauncherFiles))
-	for i := range a.ld.LauncherFiles {
-		item := a.ld.LauncherFiles[i]
-		path := absPath(item.Path)
-		view := LauncherItemView{
-			GUID:      item.GUID,
-			Title:     item.Title,
-			IconURL:   a.iconURL(item.Icon),
-			RuntimeMs: item.RuntimeMs,
-		}
-		if view.Title == "" {
-			view.Title = filepath.Base(path)
-		}
-		if p, ok := a.running[path]; ok {
-			view.Running = true
-			view.RuntimeMs += time.Since(p.start).Milliseconds()
-		}
-		items = append(items, view)
-	}
-	return items
+	a.injectRuntime()
+	return a.store
 }
 
-func (a *App) launch(guid string) error {
+func (a *App) SaveData(store AppStore) error {
 	a.mu.Lock()
-	item := a.findItem(guid)
-	if item == nil {
-		a.mu.Unlock()
-		return fmt.Errorf("invalid item guid %q", guid)
-	}
-	path := absPath(item.Path)
-	if _, ok := a.running[path]; ok {
-		a.mu.Unlock()
-		return nil
-	}
-	a.mu.Unlock()
-
-	if isExecutable(path) {
-		p := &runningProc{}
-		if err := startTracked(path, p); err != nil {
-			return err
+	defer a.mu.Unlock()
+	for i := range store.Tabs {
+		for _, slot := range store.Tabs[i].Slots {
+			if slot == nil {
+				continue
+			}
+			if val, ok := a.runtimeStats[slot.GUID]; ok {
+				slot.RuntimeMs = val
+			} else if slot.RuntimeMs > 0 {
+				a.runtimeStats[slot.GUID] = slot.RuntimeMs
+			}
+			slot.IconURL = ""
+			slot.Running = false
 		}
-		a.mu.Lock()
-		a.running[path] = p
-		autoMinimize := a.ld.Settings.AutoMinimize
-		a.mu.Unlock()
-		a.emitUpdated()
-		if autoMinimize {
-			runtime.WindowMinimise(a.ctx)
-		}
-		go func() {
-			_ = p.wait()
-			elapsed := time.Since(p.start).Milliseconds()
-			a.mu.Lock()
-			for i := range a.ld.LauncherFiles {
-				if absPath(a.ld.LauncherFiles[i].Path) == path {
-					a.ld.LauncherFiles[i].RuntimeMs += elapsed
-					break
-				}
-			}
-			delete(a.running, path)
-			restore := a.ld.Settings.AutoMinimize && len(a.running) == 0
-			if p.cleanup != nil {
-				p.cleanup()
-			}
-			a.saveLauncherData()
-			a.mu.Unlock()
-			a.emitUpdated()
-			if restore {
-				runtime.WindowUnminimise(a.ctx)
-			}
-		}()
-		return nil
 	}
-	return openFile(path)
-}
-
-func (a *App) stopProcess(path string) error {
-	a.mu.Lock()
-	p, ok := a.running[path]
-	a.mu.Unlock()
-	if ok && p.stop != nil {
-		return p.stop()
-	}
+	a.store = store
+	a.writeStore()
 	return nil
 }
 
-func (a *App) Launch(guid string) error {
-	return a.launch(guid)
-}
-
-func (a *App) Stop(guid string) error {
-	a.mu.Lock()
-	item := a.findItem(guid)
-	path := ""
-	if item != nil {
-		path = absPath(item.Path)
-	}
-	a.mu.Unlock()
-	if path == "" {
-		return fmt.Errorf("invalid item guid %q", guid)
-	}
-	err := a.stopProcess(path)
-	if err == nil {
-		a.emitUpdated()
-	}
-	return err
-}
-
-func (a *App) GetAutoMinimize() bool {
-	a.mu.Lock()
-	defer a.mu.Unlock()
-	return a.ld.Settings.AutoMinimize
-}
-
-func (a *App) SetAutoMinimize(enabled bool) error {
-	a.mu.Lock()
-	a.ld.Settings.AutoMinimize = enabled
-	a.saveLauncherData()
-	a.mu.Unlock()
-	if a.ctx != nil {
-		runtime.EventsEmit(a.ctx, "settings:updated")
-	}
-	return nil
-}
-
-func (a *App) AddFiles() error {
+func (a *App) AddFiles() []AppItem {
 	files, err := runtime.OpenMultipleFilesDialog(a.ctx, runtime.OpenDialogOptions{
 		Title: "Add Files",
 	})
 	if err != nil {
-		return err
+		return nil
 	}
 	if len(files) == 0 {
 		return nil
@@ -350,103 +324,41 @@ func (a *App) AddFiles() error {
 	return a.AddPaths(files)
 }
 
-func (a *App) AddPaths(paths []string) error {
+func (a *App) AddPaths(paths []string) []AppItem {
 	if len(paths) == 0 {
 		return nil
 	}
 	a.mu.Lock()
-	added := false
+	defer a.mu.Unlock()
+	items := make([]AppItem, 0, len(paths))
 	for _, raw := range paths {
 		path := normalizePath(raw)
 		if path == "" {
 			continue
 		}
-		dup := false
-		for _, item := range a.ld.LauncherFiles {
-			if absPath(item.Path) == path {
-				dup = true
-				break
-			}
-		}
-		if dup {
-			continue
-		}
-		a.ld.LauncherFiles = append(a.ld.LauncherFiles, LauncherItem{
-			GUID:  uuid.NewString(),
-			Path:  toStoredPath(path),
-			Title: defaultTitle(path),
-			Icon:  writeIcon(path),
+		icon := writeIcon(path)
+		items = append(items, AppItem{
+			GUID:     uuid.NewString(),
+			Name:     defaultTitle(path),
+			Path:     toStoredPath(path),
+			Icon:     icon,
+			IconURL:  a.iconURL(icon),
+			Running:  false,
+			RuntimeMs: 0,
 		})
-		added = true
 	}
-	if added {
-		a.saveLauncherData()
-	}
-	a.mu.Unlock()
-	if added {
-		a.emitUpdated()
-	}
-	return nil
+	return items
 }
 
-func (a *App) RemoveItem(guid string) error {
-	a.mu.Lock()
-	found := -1
-	for i := range a.ld.LauncherFiles {
-		if a.ld.LauncherFiles[i].GUID == guid {
-			found = i
-			break
-		}
-	}
-	if found < 0 {
-		a.mu.Unlock()
-		return fmt.Errorf("invalid item guid %q", guid)
-	}
-	item := a.ld.LauncherFiles[found]
-	path := absPath(item.Path)
-	a.mu.Unlock()
-
-	if err := a.stopProcess(path); err != nil {
-		return err
-	}
-
-	a.mu.Lock()
-	if item.Icon != "" {
-		_ = os.Remove(absPath(item.Icon))
-		delete(a.iconCache, item.Icon)
-	}
-	a.ld.LauncherFiles = append(a.ld.LauncherFiles[:found], a.ld.LauncherFiles[found+1:]...)
-	a.saveLauncherData()
-	a.mu.Unlock()
-	a.emitUpdated()
-	return nil
-}
-
-func (a *App) RenameItem(guid, title string) error {
-	title = strings.TrimSpace(title)
-	if title == "" {
-		return fmt.Errorf("name cannot be empty")
-	}
-	a.mu.Lock()
-	defer a.mu.Unlock()
-	item := a.findItem(guid)
-	if item == nil {
-		return fmt.Errorf("invalid item guid %q", guid)
-	}
-	item.Title = title
-	a.saveLauncherData()
-	a.emitUpdated()
-	return nil
-}
-
-func (a *App) ChangeIcon(guid string) error {
+func (a *App) ChangeIcon(guid string) (string, error) {
 	a.mu.Lock()
 	item := a.findItem(guid)
 	if item == nil {
 		a.mu.Unlock()
-		return fmt.Errorf("invalid item guid %q", guid)
+		return "", fmt.Errorf("invalid item guid %q", guid)
 	}
 	path := absPath(item.Path)
+	icon0 := item.Icon
 	a.mu.Unlock()
 
 	selection, err := runtime.OpenFileDialog(a.ctx, runtime.OpenDialogOptions{
@@ -456,70 +368,68 @@ func (a *App) ChangeIcon(guid string) error {
 		},
 	})
 	if err != nil {
-		return err
+		return "", err
 	}
 	if selection == "" {
-		return nil
+		return icon0, nil
 	}
 	f, err := os.Open(selection)
 	if err != nil {
-		return err
+		return "", err
 	}
 	defer f.Close()
 	img, _, err := image.Decode(f)
 	if err != nil {
-		return fmt.Errorf("unsupported image: %v", err)
+		return "", fmt.Errorf("unsupported image: %v", err)
 	}
 	icon := saveImage(img, filepath.Base(path)+"-custom")
 	if icon == "" {
-		return fmt.Errorf("failed to save icon")
+		return "", fmt.Errorf("failed to save icon")
 	}
 
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	item = a.findItem(guid)
 	if item == nil {
-		return fmt.Errorf("invalid item guid %q", guid)
+		return "", fmt.Errorf("invalid item guid %q", guid)
 	}
 	if old := item.Icon; old != "" {
 		_ = os.Remove(absPath(old))
 		delete(a.iconCache, old)
 	}
 	item.Icon = icon
-	a.saveLauncherData()
-	a.emitUpdated()
-	return nil
+	a.writeStore()
+	return icon, nil
 }
 
-func (a *App) UpdateIcon(guid string) error {
+func (a *App) UpdateIcon(guid string) (string, error) {
 	a.mu.Lock()
 	item := a.findItem(guid)
 	if item == nil {
 		a.mu.Unlock()
-		return fmt.Errorf("invalid item guid %q", guid)
+		return "", fmt.Errorf("invalid item guid %q", guid)
 	}
 	path := absPath(item.Path)
 	a.mu.Unlock()
 
 	icon := writeIcon(path)
 	if icon == "" {
-		return fmt.Errorf("failed to regenerate icon")
+		return "", fmt.Errorf("failed to regenerate icon")
 	}
 
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	item = a.findItem(guid)
 	if item == nil {
-		return fmt.Errorf("invalid item guid %q", guid)
+		return "", fmt.Errorf("invalid item guid %q", guid)
 	}
 	if old := item.Icon; old != "" {
 		_ = os.Remove(absPath(old))
 		delete(a.iconCache, old)
 	}
 	item.Icon = icon
-	a.saveLauncherData()
-	a.emitUpdated()
-	return nil
+	a.writeStore()
+	return icon, nil
 }
 
 func (a *App) Reveal(guid string) error {
@@ -534,34 +444,68 @@ func (a *App) Reveal(guid string) error {
 	return revealFile(path)
 }
 
-func (a *App) Details(guid string) string {
+func (a *App) launch(guid string) error {
 	a.mu.Lock()
-	defer a.mu.Unlock()
 	item := a.findItem(guid)
 	if item == nil {
-		return ""
+		a.mu.Unlock()
+		return fmt.Errorf("invalid item guid %q", guid)
 	}
-	b, err := json.MarshalIndent(item, "", "  ")
-	if err != nil {
-		return ""
-	}
-	return string(b)
-}
-
-func (a *App) MoveItem(from, to int) error {
-	a.mu.Lock()
-	defer a.mu.Unlock()
-	n := len(a.ld.LauncherFiles)
-	if from < 0 || from >= n || to < 0 || to >= n {
-		return fmt.Errorf("invalid index")
-	}
-	if from == to {
+	path := absPath(item.Path)
+	if _, ok := a.running[guid]; ok {
+		a.mu.Unlock()
 		return nil
 	}
-	item := a.ld.LauncherFiles[from]
-	a.ld.LauncherFiles = append(a.ld.LauncherFiles[:from], a.ld.LauncherFiles[from+1:]...)
-	a.ld.LauncherFiles = append(a.ld.LauncherFiles[:to], append([]LauncherItem{item}, a.ld.LauncherFiles[to:]...)...)
-	a.saveLauncherData()
-	a.emitUpdated()
+	autoMinimize := a.store.Settings.AutoMinimize
+	a.mu.Unlock()
+
+	if isExecutable(path) {
+		p := &runningProc{}
+		if err := startTracked(path, p); err != nil {
+			return err
+		}
+		a.mu.Lock()
+		a.running[guid] = p
+		a.mu.Unlock()
+		a.emitUpdated()
+		if autoMinimize {
+			runtime.WindowMinimise(a.ctx)
+		}
+		go func() {
+			_ = p.wait()
+			elapsed := time.Since(p.start).Milliseconds()
+			a.mu.Lock()
+			a.runtimeStats[guid] += elapsed
+			delete(a.running, guid)
+			restore := a.store.Settings.AutoMinimize && len(a.running) == 0
+			if p.cleanup != nil {
+				p.cleanup()
+			}
+			a.writeStore()
+			a.mu.Unlock()
+			a.emitUpdated()
+			if restore {
+				runtime.WindowUnminimise(a.ctx)
+			}
+		}()
+		return nil
+	}
+	return openFile(path)
+}
+
+func (a *App) Launch(guid string) error {
+	return a.launch(guid)
+}
+
+func (a *App) Stop(guid string) error {
+	a.mu.Lock()
+	p, ok := a.running[guid]
+	a.mu.Unlock()
+	if ok && p.stop != nil {
+		if err := p.stop(); err != nil {
+			return err
+		}
+		a.emitUpdated()
+	}
 	return nil
 }

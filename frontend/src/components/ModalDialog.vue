@@ -6,20 +6,19 @@ import {
   TransitionChild,
   TransitionRoot,
 } from '@headlessui/vue'
-import { ref, watch } from 'vue'
+import { onMounted, ref, watch } from 'vue'
 import { ClipboardSetText } from '../../wailsjs/runtime/runtime'
-import { Details, RenameItem } from '../api'
-import { showError } from '../utils'
 
 const props = defineProps<{
   open: boolean
-  guid: string
   mode: 'rename' | 'details'
   title: string
   initialName: string
+  detailsText: string
 }>()
 
 const emit = defineEmits<{
+  ok: [name: string]
   close: []
 }>()
 
@@ -27,32 +26,22 @@ const name = ref('')
 const details = ref('')
 
 watch(
-  () => [props.open, props.mode, props.guid, props.initialName] as const,
-  async ([open, mode, , initialName]) => {
-    if (!open)
+  () => [props.open, props.mode, props.initialName, props.detailsText] as const,
+  () => {
+    if (!props.open)
       return
-    name.value = mode === 'rename' ? initialName : ''
-    details.value = ''
-    if (mode === 'details') {
-      try {
-        details.value = await Details(props.guid)
-      }
-      catch (err) {
-        showError(err)
-      }
-    }
+    name.value = props.mode === 'rename' ? props.initialName : ''
+    details.value = props.detailsText
   },
 )
 
-async function onOk() {
-  if (props.mode === 'rename') {
-    try {
-      await RenameItem(props.guid, name.value)
-    }
-    catch (err) {
-      showError(err)
-    }
-  }
+onMounted(() => {
+  name.value = props.mode === 'rename' ? props.initialName : ''
+  details.value = props.detailsText
+})
+
+function onOk() {
+  emit('ok', name.value.trim())
   emit('close')
 }
 
@@ -86,10 +75,7 @@ function onCopy() {
         leave-from="opacity-100"
         leave-to="opacity-0"
       >
-        <div
-          class="fixed inset-0 bg-black/40"
-          aria-hidden="true"
-        />
+        <div class="fixed inset-0 bg-black/40" aria-hidden="true" />
       </TransitionChild>
 
       <TransitionChild
@@ -103,10 +89,7 @@ function onCopy() {
       >
         <div class="fixed inset-0 flex items-center justify-center p-4">
           <DialogPanel class="w-[420px] max-w-full rounded-md bg-white p-4 dark:bg-gray-800 dark:text-gray-100">
-            <DialogTitle
-              as="h3"
-              class="mb-2.5 mt-0"
-            >
+            <DialogTitle as="h3" class="mb-2.5 mt-0">
               {{ title }}
             </DialogTitle>
             <input

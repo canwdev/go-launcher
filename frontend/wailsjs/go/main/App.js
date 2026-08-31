@@ -14,40 +14,20 @@ export function ChangeIcon(arg1) {
   return window['go']['main']['App']['ChangeIcon'](arg1);
 }
 
-export function Details(arg1) {
-  return window['go']['main']['App']['Details'](arg1);
-}
-
-export function GetAutoMinimize() {
-  return window['go']['main']['App']['GetAutoMinimize']();
-}
-
-export function GetItems() {
-  return window['go']['main']['App']['GetItems']();
+export function GetData() {
+  return window['go']['main']['App']['GetData']();
 }
 
 export function Launch(arg1) {
   return window['go']['main']['App']['Launch'](arg1);
 }
 
-export function MoveItem(arg1, arg2) {
-  return window['go']['main']['App']['MoveItem'](arg1, arg2);
-}
-
-export function RemoveItem(arg1) {
-  return window['go']['main']['App']['RemoveItem'](arg1);
-}
-
-export function RenameItem(arg1, arg2) {
-  return window['go']['main']['App']['RenameItem'](arg1, arg2);
-}
-
 export function Reveal(arg1) {
   return window['go']['main']['App']['Reveal'](arg1);
 }
 
-export function SetAutoMinimize(arg1) {
-  return window['go']['main']['App']['SetAutoMinimize'](arg1);
+export function SaveData(arg1) {
+  return window['go']['main']['App']['SaveData'](arg1);
 }
 
 export function Stop(arg1) {
