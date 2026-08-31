@@ -338,8 +338,9 @@ func main() {
 
 			menuBtn.OnTapped = func() {
 				rename := func() {
-					entry := widget.NewEntry()
-					entry.SetText(title)
+				entry := widget.NewEntry()
+				entry.SetText(title)
+				entry.CursorColumn = len([]rune(title))
 					d := dialog.NewForm("Rename", "OK", "Cancel",
 						[]*widget.FormItem{widget.NewFormItem("Name", entry)},
 						func(ok bool) {
@@ -357,6 +358,7 @@ func main() {
 						}, w)
 					d.Resize(fyne.NewSize(400, d.MinSize().Height))
 					d.Show()
+					w.Canvas().Focus(entry)
 				}
 
 				changeIcon := func() {
