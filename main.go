@@ -37,6 +37,23 @@ const saveFile = "go-launcher-data.json"
 
 var running = map[string]*runningProc{}
 
+var absBase, _ = filepath.Abs(".")
+
+func toStoredPath(abs string) string {
+	rel, err := filepath.Rel(absBase, abs)
+	if err != nil {
+		return abs
+	}
+	return rel
+}
+
+func absPath(p string) string {
+	if filepath.IsAbs(p) {
+		return p
+	}
+	return filepath.Join(absBase, p)
+}
+
 func normalizePath(path string) string {
 	if runtime.GOOS != "windows" {
 		return path
@@ -74,18 +91,19 @@ func formatRuntime(ms int64) string {
 	d := total / 86400
 	h := (total % 86400) / 3600
 	m := (total % 3600) / 60
-	s := total % 60
-	parts := make([]string, 0, 4)
+	parts := make([]string, 0, 3)
 	if d > 0 {
 		parts = append(parts, fmt.Sprintf("%dd", d))
 	}
-	if h > 0 || len(parts) > 0 {
+	if h > 0 {
 		parts = append(parts, fmt.Sprintf("%dh", h))
 	}
-	if m > 0 || len(parts) > 0 {
+	if m > 0 {
 		parts = append(parts, fmt.Sprintf("%dm", m))
 	}
-	parts = append(parts, fmt.Sprintf("%ds", s))
+	if len(parts) == 0 {
+		return "1m"
+	}
 	return strings.Join(parts, " ")
 }
 
@@ -124,7 +142,7 @@ func main() {
 			elapsed := time.Since(p.start).Milliseconds()
 			fyne.Do(func() {
 				for i := range ld.LauncherFiles {
-					if ld.LauncherFiles[i].Path == path {
+					if absPath(ld.LauncherFiles[i].Path) == path {
 						ld.LauncherFiles[i].RuntimeMs += elapsed
 						break
 					}
@@ -158,7 +176,7 @@ func main() {
 			return container.NewHBox(name, layout.NewSpacer(), runtime, runBtn, delBtn)
 		},
 		func(id widget.ListItemID, obj fyne.CanvasObject) {
-			path := ld.LauncherFiles[id].Path
+			path := absPath(ld.LauncherFiles[id].Path)
 			box := obj.(*fyne.Container)
 			name := box.Objects[0].(*widget.Label)
 			runtimeLabel := box.Objects[2].(*widget.Label)
@@ -178,7 +196,10 @@ func main() {
 			if _, ok := running[path]; ok {
 				runBtn.SetText("Stop")
 				runBtn.Importance = widget.DangerImportance
-				runBtn.OnTapped = func() { stopProcess(path) }
+				runBtn.OnTapped = func() {
+					stopProcess(path)
+					fileList.Refresh()
+				}
 			} else {
 				runBtn.SetText("Run")
 				runBtn.Importance = widget.MediumImportance
@@ -186,7 +207,9 @@ func main() {
 					if isExecutable(path) {
 						if err := startProcess(path); err != nil {
 							dialog.ShowError(err, w)
+							return
 						}
+						fileList.Refresh()
 					} else if err := openFile(path); err != nil {
 						dialog.ShowError(err, w)
 					}
@@ -216,7 +239,7 @@ func main() {
 	)
 
 	go func() {
-		tick := time.NewTicker(time.Second)
+		tick := time.NewTicker(time.Minute)
 		defer tick.Stop()
 		for range tick.C {
 			fyne.Do(func() { fileList.Refresh() })
@@ -235,12 +258,12 @@ func main() {
 			defer reader.Close()
 			path := normalizePath(reader.URI().Path())
 			for _, item := range ld.LauncherFiles {
-				if item.Path == path {
+				if absPath(item.Path) == path {
 					dialog.ShowInformation("Notice", "File is already in the list", w)
 					return
 				}
 			}
-			ld.LauncherFiles = append(ld.LauncherFiles, LauncherItem{Path: path})
+			ld.LauncherFiles = append(ld.LauncherFiles, LauncherItem{Path: toStoredPath(path)})
 			saveLauncherData(ld)
 			fileList.Refresh()
 		}, w)
