@@ -6,6 +6,7 @@ import { OpenDirectory } from './api'
 import AppDialog from './components/AppDialog.vue'
 import ItemEditDialog from './components/ItemEditDialog.vue'
 import LauncherRow from './components/LauncherRow.vue'
+import RuntimeEditDialog from './components/RuntimeEditDialog.vue'
 import TabBar from './components/TabBar.vue'
 import { useConfirmDialog } from './composables/useConfirmDialog'
 import { useModalDialog } from './composables/useModalDialog'
@@ -14,7 +15,7 @@ import { useTheme } from './composables/useTheme'
 import { useToast } from './composables/useToast'
 import { showError } from './utils'
 
-const { activeTab, state, store, addFilesInto, addTab, renameItem, removeItem, setActiveTab, moveTab, renameTab, removeTab, updateItemIcon, updateItem, batchUpdateIcons, save, refresh, setGameMode, setAbsolutePaths, convertToAbsolute, convertToRelative } = useStore()
+const { activeTab, state, store, addFilesInto, addTab, renameItem, removeItem, setActiveTab, moveTab, renameTab, removeTab, updateItemIcon, updateItem, batchUpdateIcons, save, refresh, setGameMode, setRuntimeMs, setAbsolutePaths, convertToAbsolute, convertToRelative } = useStore()
 const { theme, setTheme } = useTheme()
 const { toasts, showToast } = useToast()
 
@@ -110,6 +111,22 @@ function openItemEdit(item: AppItem) {
 
 function onItemSaved(guid: string, fields: { name: string, path: string, args: string, working_dir: string, icon: string }) {
   updateItem(guid, fields).catch(showError)
+}
+
+const runtimeEditOpen = ref(false)
+const runtimeEditGuid = ref<string | null>(null)
+const runtimeEditMs = ref(0)
+
+function onEditRuntime(guid: string) {
+  runtimeEditGuid.value = guid
+  runtimeEditMs.value = state.value[guid]?.runtime_ms ?? store.value.apps[guid]?.runtime_ms ?? 0
+  runtimeEditOpen.value = true
+}
+
+function onRuntimeSaved(minutes: number) {
+  if (!runtimeEditGuid.value)
+    return
+  setRuntimeMs(runtimeEditGuid.value, minutes * 60000).catch(showError)
 }
 
 function openItemRename(item: AppItem) {
@@ -267,6 +284,7 @@ function onAddFiles() {
         :game-mode="store.settings.game_mode"
         @rename="openItemRename(row.item)" @details="openItemEdit(row.item)" @delete="onDeleteRequested(row.item)"
         @refresh="refresh" @icondone="(icon, iconUrl) => onIconDone(icon, iconUrl, row.item)"
+        @edit-runtime="onEditRuntime(row.item.guid)"
         @dragstart="onDragStart(index)" @dragover="onDragOver(index)" @drop="onDrop(index)" @dragend="onDragEnd"
       />
     </main>
@@ -294,6 +312,10 @@ function onAddFiles() {
     </AppDialog>
 
     <ItemEditDialog :open="editOpen" :item="editingItem" @save="onItemSaved" @close="editOpen = false" />
+
+    <RuntimeEditDialog
+      :open="runtimeEditOpen" :runtime-ms="runtimeEditMs" @save="onRuntimeSaved" @close="runtimeEditOpen = false"
+    />
 
     <AppDialog :open="confirmOpen" title="Confirm" @close="closeConfirm">
       <p class="m-0">

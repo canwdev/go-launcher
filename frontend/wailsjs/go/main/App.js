@@ -62,6 +62,10 @@ export function SaveData(arg1) {
   return window['go']['main']['App']['SaveData'](arg1);
 }
 
+export function SetRuntimeMs(arg1, arg2) {
+  return window['go']['main']['App']['SetRuntimeMs'](arg1, arg2);
+}
+
 export function Stop(arg1) {
   return window['go']['main']['App']['Stop'](arg1);
 }

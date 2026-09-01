@@ -1,7 +1,7 @@
 import type { AppData, AppItem, AppStore, ItemState } from '../api'
 import { onMounted, onUnmounted, ref } from 'vue'
 import { EventsOff, EventsOn, OnFileDrop } from '../../wailsjs/runtime/runtime'
-import { AddFiles, AddPaths, ConvertToAbsolute, ConvertToRelative, GetData, SaveData, UpdateIcon } from '../api'
+import { AddFiles, AddPaths, ConvertToAbsolute, ConvertToRelative, GetData, SaveData, SetRuntimeMs, UpdateIcon } from '../api'
 import { debounce, isAutoIcon, randomUUID, showError } from '../utils'
 import { showToast } from './useToast'
 
@@ -232,6 +232,11 @@ export function useStore() {
     await save()
   }
 
+  async function setRuntimeMs(guid: string, ms: number) {
+    await SetRuntimeMs(guid, Math.max(0, Math.floor(ms)))
+    await refresh()
+  }
+
   async function setAbsolutePaths(enabled: boolean) {
     store.value.settings.absolute_paths = enabled
     await save()
@@ -299,6 +304,7 @@ export function useStore() {
     updateItem,
     batchUpdateIcons,
     setGameMode,
+    setRuntimeMs,
     setAbsolutePaths,
     convertToAbsolute,
     convertToRelative,

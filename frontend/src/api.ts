@@ -15,6 +15,7 @@ import {
   PickImageFile,
   Reveal,
   SaveData,
+  SetRuntimeMs,
   Stop,
   UpdateIcon,
 } from '../wailsjs/go/main/App'
@@ -43,6 +44,7 @@ export {
   PickImageFile,
   Reveal,
   SaveData,
+  SetRuntimeMs,
   Stop,
   UpdateIcon,
 }

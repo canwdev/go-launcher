@@ -5,6 +5,7 @@ export function formatRuntime(ms: number): string {
   const d = Math.floor(total / 86400)
   const h = Math.floor((total % 86400) / 3600)
   const m = Math.floor((total % 3600) / 60)
+  const s = total % 60
   const parts: string[] = []
   if (d > 0)
     parts.push(`${d}d`)
@@ -12,8 +13,14 @@ export function formatRuntime(ms: number): string {
     parts.push(`${h}h`)
   if (m > 0)
     parts.push(`${m}m`)
-  if (parts.length === 0)
-    parts.push('1m')
+  if (parts.length === 0) {
+    // Sub-minute runtimes: show seconds so small values stay visible
+    // (e.g. 2703ms -> "2s") instead of collapsing to 0m / "--".
+    if (s > 0)
+      parts.push(`1m`)
+    else
+      parts.push('-')
+  }
   return parts.join(' ')
 }
 

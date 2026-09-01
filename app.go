@@ -134,6 +134,23 @@ func defaultStore() AppStore {
 	}
 }
 
+// settingsMissingKey reports whether the raw JSON's settings object lacks the
+// given key (or the whole settings block is missing).
+func settingsMissingKey(data []byte, key string) bool {
+	var probe struct {
+		Settings json.RawMessage `json:"settings"`
+	}
+	if err := json.Unmarshal(data, &probe); err != nil || len(probe.Settings) == 0 {
+		return true
+	}
+	var keys map[string]json.RawMessage
+	if err := json.Unmarshal(probe.Settings, &keys); err != nil {
+		return true
+	}
+	_, ok := keys[key]
+	return !ok
+}
+
 func loadStore() AppStore {
 	data, err := os.ReadFile(saveFile)
 	if err != nil {
@@ -142,6 +159,12 @@ func loadStore() AppStore {
 	var store AppStore
 	if err := json.Unmarshal(data, &store); err != nil {
 		return defaultStore()
+	}
+	// Files predating the game_mode key (renamed from auto_minimize) carry no
+	// game_mode setting; default it to ON so the runtime display stays visible
+	// on startup. An explicit "game_mode": false is always respected.
+	if settingsMissingKey(data, "game_mode") {
+		store.Settings.GameMode = true
 	}
 	if store.Apps == nil {
 		store.Apps = map[string]*AppItem{}
@@ -215,6 +238,14 @@ func NewApp() *App {
 		runtimeStats: map[string]int64{},
 		running:      map[string]*runningProc{},
 		iconCache:    map[string]string{},
+	}
+	// Seed in-memory runtime stats from the persisted store so GetData/buildState
+	// return the real accumulated time on startup instead of 0 (which previously
+	// made the frontend show no real runtime on every fresh launch).
+	for guid, item := range app.store.Apps {
+		if item != nil {
+			app.runtimeStats[guid] = item.RuntimeMs
+		}
 	}
 	app.pruneIconFiles()
 	return app
@@ -677,5 +708,24 @@ func (a *App) Stop(guid string) error {
 		}
 		a.emitState()
 	}
+	return nil
+}
+
+// SetRuntimeMs overrides the cumulative runtime for an item. It writes the
+// authoritative runtimeStats directly so the normal SaveData merge cannot
+// clobber a user-edited value. Negative input is clamped to 0.
+func (a *App) SetRuntimeMs(guid string, ms int64) error {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	item := a.findItem(guid)
+	if item == nil {
+		return fmt.Errorf("invalid item guid %q", guid)
+	}
+	if ms < 0 {
+		ms = 0
+	}
+	a.runtimeStats[guid] = ms
+	item.RuntimeMs = ms
+	a.writeStore()
 	return nil
 }
