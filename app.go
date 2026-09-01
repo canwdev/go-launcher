@@ -75,9 +75,11 @@ type runningProc struct {
 	cleanup func()
 }
 
-const saveFile = "go-launcher-data.json"
+const dataDir = "go-launcher-data"
 
-const iconsDir = "icons"
+const saveFile = dataDir + "/go-launcher-data.json"
+
+const iconsDir = dataDir + "/icons"
 
 var absBase, _ = filepath.Abs(".")
 
@@ -206,6 +208,7 @@ type App struct {
 }
 
 func NewApp() *App {
+	_ = os.MkdirAll(filepath.Join(absBase, dataDir), 0755)
 	return &App{
 		store:        loadStore(),
 		runtimeStats: map[string]int64{},
