@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { AppItem } from '../api'
 import { Menu, MenuButton, MenuItem, MenuItems, TransitionRoot } from '@headlessui/vue'
-import { Ellipsis, Folder, ImageUp, Pencil, PencilLine, Trash2 } from '@lucide/vue'
+import { Copy, Ellipsis, Folder, ImageUp, Pencil, PencilLine, Trash2 } from '@lucide/vue'
 import { computed } from 'vue'
 import { ConvertItemToAbsolute, ConvertItemToRelative, Launch, Reveal, Stop, UpdateIcon } from '../api'
 import { formatRuntime, isAutoIcon, showError } from '../utils'
@@ -19,11 +19,12 @@ const props = defineProps<{
 const emit = defineEmits<{
   'rename': []
   'details': []
+  'duplicate': []
   'delete': []
   'refresh': []
   'icondone': [icon: string, iconUrl: string]
   'edit-runtime': []
-  'dragstart': []
+  'dragstart': [e: DragEvent]
   'dragover': []
   'drop': []
   'dragend': []
@@ -72,7 +73,7 @@ async function run(action: () => Promise<void>) {
     :class="{
       'opacity-40': dragging,
       'ring-2 ring-blue-400': dragOver,
-    }" @dblclick="onDoubleClick" @dragstart="emit('dragstart')" @dragover.prevent="emit('dragover')"
+    }" @dblclick="onDoubleClick" @dragstart="emit('dragstart', $event)" @dragover.prevent="emit('dragover')"
     @drop.prevent="emit('drop')" @dragend="emit('dragend')"
   >
     <img
@@ -116,6 +117,15 @@ async function run(action: () => Promise<void>) {
             >
               <Pencil class="h-4 w-4 shrink-0 text-gray-400 dark:text-gray-500" />
               <span>Edit</span>
+            </button>
+          </MenuItem>
+          <MenuItem v-slot="{ active }">
+            <button
+              class="flex w-full items-center gap-2 px-3 py-1.5 text-left" :class="active ? 'bg-gray-100 dark:bg-gray-700' : ''"
+              @click="emit('duplicate')"
+            >
+              <Copy class="h-4 w-4 shrink-0 text-gray-400 dark:text-gray-500" />
+              <span>Duplicate</span>
             </button>
           </MenuItem>
           <MenuItem v-slot="{ active }">

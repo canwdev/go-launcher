@@ -18,7 +18,7 @@ import { useTheme } from './composables/useTheme'
 import { useToast } from './composables/useToast'
 import { showError } from './utils'
 
-const { activeTab, state, store, addFilesInto, addTab, renameItem, removeItem, setActiveTab, moveTab, renameTab, removeTab, updateItemIcon, updateItem, batchUpdateIcons, save, refresh, setGameMode, setRuntimeMs, setAbsolutePaths, convertToAbsolute, convertToRelative } = useStore()
+const { activeTab, state, store, addFilesInto, addTab, renameItem, removeItem, setActiveTab, moveTab, renameTab, removeTab, updateItemIcon, updateItem, batchUpdateIcons, save, refresh, setGameMode, setRuntimeMs, setAbsolutePaths, convertToAbsolute, convertToRelative, duplicateItem, moveItemToTab, copyItemToTab } = useStore()
 const { theme, setTheme } = useTheme()
 const { toasts, showToast } = useToast()
 
@@ -83,6 +83,9 @@ const appMenuItems: MenuEntry[] = [
 const draggingIndex = ref<number | null>(null)
 const dragFromIndex = ref<number | null>(null)
 const dragOverIndex = ref<number | null>(null)
+// GUID of the item currently being dragged (null when dragging a tab or nothing).
+const dragItemGuid = ref<string | null>(null)
+const ITEM_DRAG_MIME = 'application/x-go-launcher-item'
 
 const rows = computed<{ item: AppItem, index: number }[]>(() => {
   const tab = activeTab.value
@@ -162,13 +165,17 @@ function onIconDone(icon: string, iconUrl: string, item: AppItem) {
   updateItemIcon(item.guid, icon, iconUrl).catch(showError)
 }
 
-function onDragStart(index: number) {
-  const tab = activeTab.value
-  if (!tab)
+function onDragStart(e: DragEvent, index: number) {
+  const row = rows.value[index]
+  if (!row)
     return
+  dragItemGuid.value = row.item.guid
   dragFromIndex.value = index
   draggingIndex.value = index
   dragOverIndex.value = null
+  e.dataTransfer?.setData(ITEM_DRAG_MIME, row.item.guid)
+  if (e.dataTransfer)
+    e.dataTransfer.effectAllowed = 'copyMove'
 }
 
 function onDragOver(index: number) {
@@ -197,6 +204,16 @@ function resetDrag() {
   dragFromIndex.value = null
   draggingIndex.value = null
   dragOverIndex.value = null
+  dragItemGuid.value = null
+}
+
+// Drop an item onto a tab: copy (Ctrl held) or move.
+function onItemDropOnTab(guid: string, tabGuid: string, copy: boolean) {
+  resetDrag()
+  if (copy)
+    copyItemToTab(guid, tabGuid).catch(showError)
+  else
+    moveItemToTab(guid, tabGuid).catch(showError)
 }
 
 async function onRefresh() {
@@ -220,8 +237,10 @@ function onAddFiles() {
 <template>
   <div class="flex h-screen flex-col bg-gray-100 text-sm text-gray-800 dark:bg-gray-900 dark:text-gray-100">
     <TabBar
-      :tabs="store.categories" :active-guid="activeTab?.guid ?? ''" @add="addTab().catch(showError)"
+      :tabs="store.categories" :active-guid="activeTab?.guid ?? ''" :drag-item-guid="dragItemGuid"
+      @add="addTab().catch(showError)"
       @select="setActiveTab" @rename="openTabRename" @remove="onDeleteTabRequested" @reorder="moveTab"
+      @item-drop="onItemDropOnTab"
     >
       <div class="flex flex-1 items-center justify-end gap-1">
         <button
@@ -287,10 +306,10 @@ function onAddFiles() {
               :runtime-ms="state[row.item.guid]?.runtime_ms ?? 0" :dragging="draggingIndex === index"
               :drag-over="dragOverIndex === index && draggingIndex !== null && dragOverIndex !== draggingIndex"
               :game-mode="store.settings.game_mode"
-              @rename="openItemRename(row.item)" @details="openItemEdit(row.item)" @delete="onDeleteRequested(row.item)"
+              @rename="openItemRename(row.item)" @details="openItemEdit(row.item)" @duplicate="duplicateItem(row.item.guid)" @delete="onDeleteRequested(row.item)"
               @refresh="refresh" @icondone="(icon, iconUrl) => onIconDone(icon, iconUrl, row.item)"
               @edit-runtime="onEditRuntime(row.item.guid)"
-              @dragstart="onDragStart(index)" @dragover="onDragOver(index)" @drop="onDrop" @dragend="onDragEnd"
+              @dragstart="(e: DragEvent) => onDragStart(e, index)" @dragover="onDragOver(index)" @drop="onDrop" @dragend="onDragEnd"
             />
           </TransitionGroup>
         </div>

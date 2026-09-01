@@ -189,6 +189,56 @@ export function useStore() {
     await save()
   }
 
+  async function duplicateItem(guid: string) {
+    const app = store.value.apps[guid]
+    const tab = activeTab.value
+    if (!app || !tab)
+      return
+    const copy: AppItem = {
+      ...app,
+      guid: randomUUID(),
+      name: `${app.name} (copy)`,
+      runtime_ms: 0,
+    }
+    store.value.apps[copy.guid] = copy
+    if (state.value[guid]?.icon_url)
+      state.value[copy.guid] = { ...state.value[copy.guid], icon_url: state.value[guid].icon_url }
+    const idx = tab.slots.indexOf(guid)
+    if (idx >= 0)
+      tab.slots.splice(idx + 1, 0, copy.guid)
+    else
+      tab.slots.push(copy.guid)
+    await save()
+  }
+
+  async function moveItemToTab(guid: string, toTabGuid: string) {
+    const target = store.value.categories.find(c => c.guid === toTabGuid)
+    if (!target)
+      return
+    for (const cat of store.value.categories)
+      cat.slots = cat.slots.filter(s => s !== guid)
+    target.slots.push(guid)
+    await save()
+  }
+
+  async function copyItemToTab(guid: string, toTabGuid: string) {
+    const app = store.value.apps[guid]
+    const target = store.value.categories.find(c => c.guid === toTabGuid)
+    if (!app || !target)
+      return
+    const copy: AppItem = {
+      ...app,
+      guid: randomUUID(),
+      name: `${app.name} (copy)`,
+      runtime_ms: 0,
+    }
+    store.value.apps[copy.guid] = copy
+    if (state.value[guid]?.icon_url)
+      state.value[copy.guid] = { ...state.value[copy.guid], icon_url: state.value[guid].icon_url }
+    target.slots.push(copy.guid)
+    await save()
+  }
+
   async function updateItemIcon(guid: string, icon: string, iconUrl: string, silent = false) {
     const app = store.value.apps[guid]
     if (!app)
@@ -300,6 +350,9 @@ export function useStore() {
     addFilesInto,
     removeItem,
     renameItem,
+    duplicateItem,
+    moveItemToTab,
+    copyItemToTab,
     updateItemIcon,
     updateItem,
     batchUpdateIcons,
