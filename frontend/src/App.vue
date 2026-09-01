@@ -2,16 +2,18 @@
 import type { AppItem } from './api'
 import { Menu, MenuButton, MenuItem, MenuItems, TransitionRoot } from '@headlessui/vue'
 import { computed, ref } from 'vue'
-import ConfirmDialog from './components/ConfirmDialog.vue'
+import AppDialog from './components/AppDialog.vue'
+import ItemEditDialog from './components/ItemEditDialog.vue'
 import LauncherRow from './components/LauncherRow.vue'
-import ModalDialog from './components/ModalDialog.vue'
 import TabBar from './components/TabBar.vue'
+import { useConfirmDialog } from './composables/useConfirmDialog'
+import { useModalDialog } from './composables/useModalDialog'
 import { useStore } from './composables/useStore'
 import { useTheme } from './composables/useTheme'
 import { useToast } from './composables/useToast'
 import { showError } from './utils'
 
-const { activeTab, state, store, addFilesInto, addTab, renameItem, removeItem, setActiveTab, moveTab, renameTab, removeTab, updateItemIcon, save, refresh, setAutoMinimize, setAbsolutePaths, convertToAbsolute, convertToRelative } = useStore()
+const { activeTab, state, store, addFilesInto, addTab, renameItem, removeItem, setActiveTab, moveTab, renameTab, removeTab, updateItemIcon, updateItem, save, refresh, setAutoMinimize, setAbsolutePaths, convertToAbsolute, convertToRelative } = useStore()
 const { theme, setTheme } = useTheme()
 const { toasts, showToast } = useToast()
 
@@ -60,44 +62,10 @@ const rows = computed<{ item: AppItem, index: number }[]>(() => {
 const draggingIndex = ref<number | null>(null)
 const dragOverIndex = ref<number | null>(null)
 
-const modalOpen = ref(false)
-const modalMode = ref<'rename' | 'details'>('rename')
-const modalTitle = ref('')
-const modalInitialName = ref('')
-const modalDetails = ref('')
 type ModalTarget = { kind: 'item', guid: string } | { kind: 'tab', guid: string }
 const modalTarget = ref<ModalTarget | null>(null)
 
-const confirmOpen = ref(false)
-const confirmMessage = ref('')
-const confirmAction = ref<null | (() => void)>(null)
-
-function openItemDetails(item: AppItem) {
-  modalMode.value = 'details'
-  modalTitle.value = item.name
-  modalDetails.value = JSON.stringify(item, null, 2)
-  modalOpen.value = true
-}
-
-function openItemRename(item: AppItem) {
-  modalMode.value = 'rename'
-  modalTitle.value = 'Rename'
-  modalInitialName.value = item.name
-  modalTarget.value = { kind: 'item', guid: item.guid }
-  modalOpen.value = true
-}
-
-function openTabRename(guid: string, name: string) {
-  modalMode.value = 'rename'
-  modalTitle.value = 'Rename Tab'
-  modalInitialName.value = name
-  modalTarget.value = { kind: 'tab', guid }
-  modalOpen.value = true
-}
-
-function onModalOk(name: string) {
-  if (!name)
-    return
+function onSubmitModal(name: string) {
   const target = modalTarget.value
   if (!target)
     return
@@ -109,22 +77,38 @@ function onModalOk(name: string) {
   }
 }
 
+const { open: modalOpen, title: modalTitle, name: modalName, openRename: openModalRename, ok: onModalOk, close: closeModal } = useModalDialog(onSubmitModal)
+
+const { open: confirmOpen, message: confirmMessage, request: requestConfirm, confirm: onConfirm, close: closeConfirm } = useConfirmDialog()
+
+const editOpen = ref(false)
+const editingItem = ref<AppItem | null>(null)
+
+function openItemEdit(item: AppItem) {
+  editingItem.value = item
+  editOpen.value = true
+}
+
+function onItemSaved(guid: string, fields: { name: string, path: string, args: string, working_dir: string }) {
+  updateItem(guid, fields).catch(showError)
+}
+
+function openItemRename(item: AppItem) {
+  modalTarget.value = { kind: 'item', guid: item.guid }
+  openModalRename('Rename', item.name)
+}
+
+function openTabRename(guid: string, name: string) {
+  modalTarget.value = { kind: 'tab', guid }
+  openModalRename('Rename Tab', name)
+}
+
 function onDeleteRequested(item: AppItem) {
-  confirmMessage.value = `Delete "${item.name}"?`
-  confirmAction.value = () => removeItem(item.guid).catch(showError)
-  confirmOpen.value = true
+  requestConfirm(`Delete "${item.name}"?`, () => removeItem(item.guid).catch(showError))
 }
 
 function onDeleteTabRequested(guid: string, name: string) {
-  confirmMessage.value = `Delete tab "${name}"?`
-  confirmAction.value = () => removeTab(guid).catch(showError)
-  confirmOpen.value = true
-}
-
-function onConfirm() {
-  confirmOpen.value = false
-  confirmAction.value?.()
-  confirmAction.value = null
+  requestConfirm(`Delete tab "${name}"?`, () => removeTab(guid).catch(showError))
 }
 
 function onIconDone(icon: string, iconUrl: string, item: AppItem) {
@@ -258,21 +242,55 @@ function onAddFiles() {
         :icon-url="state[row.item.guid]?.icon_url ?? ''" :running="state[row.item.guid]?.running ?? false"
         :runtime-ms="state[row.item.guid]?.runtime_ms ?? 0" :dragging="draggingIndex === index"
         :drag-over="dragOverIndex === index && draggingIndex !== null && draggingIndex !== index"
-        @rename="openItemRename(row.item)" @details="openItemDetails(row.item)" @delete="onDeleteRequested(row.item)"
+        @rename="openItemRename(row.item)" @details="openItemEdit(row.item)" @delete="onDeleteRequested(row.item)"
         @icondone="(icon, iconUrl) => onIconDone(icon, iconUrl, row.item)" @dragstart="onDragStart(index)"
         @dragover="onDragOver(index)" @drop="onDrop(index)" @dragend="onDragEnd"
       />
     </main>
 
-    <ModalDialog
-      :open="modalOpen" :mode="modalMode" :title="modalTitle" :initial-name="modalInitialName"
-      :details-text="modalDetails" @ok="onModalOk" @close="modalOpen = false"
-    />
+    <AppDialog :open="modalOpen" :title="modalTitle" @close="closeModal">
+      <input
+        v-model="modalName" type="text" autofocus
+        class="w-full rounded border border-gray-400 px-1.5 py-1 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100"
+        @keyup.enter="onModalOk"
+      >
+      <template #actions>
+        <button
+          class="rounded border border-gray-400 bg-white px-2.5 py-1 hover:bg-gray-200 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 dark:hover:bg-gray-600"
+          @click="onModalOk"
+        >
+          OK
+        </button>
+        <button
+          class="rounded border border-gray-400 bg-white px-2.5 py-1 hover:bg-gray-200 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 dark:hover:bg-gray-600"
+          @click="closeModal"
+        >
+          Cancel
+        </button>
+      </template>
+    </AppDialog>
 
-    <ConfirmDialog
-      :open="confirmOpen" title="Confirm" :message="confirmMessage" @confirm="onConfirm"
-      @close="confirmOpen = false"
-    />
+    <ItemEditDialog :open="editOpen" :item="editingItem" @save="onItemSaved" @close="editOpen = false" />
+
+    <AppDialog :open="confirmOpen" title="Confirm" @close="closeConfirm">
+      <p class="m-0">
+        {{ confirmMessage }}
+      </p>
+      <template #actions>
+        <button
+          class="rounded border border-gray-400 bg-white px-2.5 py-1 hover:bg-gray-200 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 dark:hover:bg-gray-600"
+          @click="closeConfirm"
+        >
+          Cancel
+        </button>
+        <button
+          class="rounded border border-red-600 bg-red-500 px-2.5 py-1 text-white hover:bg-red-600"
+          @click="onConfirm"
+        >
+          Delete
+        </button>
+      </template>
+    </AppDialog>
 
     <div class="pointer-events-none fixed bottom-3 left-1/2 z-50 flex -translate-x-1/2 flex-col items-center gap-2">
       <TransitionGroup name="toast">

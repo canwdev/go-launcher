@@ -27,8 +27,11 @@ func revealFile(path string) error {
 	}
 }
 
-func startTracked(path string, proc *runningProc) error {
-	cmd := exec.Command(path)
+func startTracked(path string, args []string, workDir string, proc *runningProc) error {
+	cmd := exec.Command(path, args...)
+	if workDir != "" {
+		cmd.Dir = workDir
+	}
 	if err := cmd.Start(); err != nil {
 		return err
 	}

@@ -70,3 +70,26 @@ func isExecutable(path string) bool {
 	}
 	return info.Mode()&0111 != 0
 }
+
+func splitArgs(s string) []string {
+	var args []string
+	var cur strings.Builder
+	inQuote := false
+	for _, r := range s {
+		switch {
+		case r == '"':
+			inQuote = !inQuote
+		case (r == ' ' || r == '\t') && !inQuote:
+			if cur.Len() > 0 {
+				args = append(args, cur.String())
+				cur.Reset()
+			}
+		default:
+			cur.WriteRune(r)
+		}
+	}
+	if cur.Len() > 0 {
+		args = append(args, cur.String())
+	}
+	return args
+}

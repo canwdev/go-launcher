@@ -190,6 +190,15 @@ export function useStore() {
     showToast('Icon updated')
   }
 
+  async function updateItem(guid: string, fields: Partial<AppItem>) {
+    const app = store.value.apps[guid]
+    if (!app)
+      return
+    Object.assign(app, fields)
+    await save()
+    showToast('Item updated')
+  }
+
   async function setAutoMinimize(enabled: boolean) {
     store.value.settings.auto_minimize = enabled
     await save()
@@ -259,6 +268,7 @@ export function useStore() {
     removeItem,
     renameItem,
     updateItemIcon,
+    updateItem,
     setAutoMinimize,
     setAbsolutePaths,
     convertToAbsolute,

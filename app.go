@@ -337,14 +337,17 @@ func (a *App) AddPaths(paths []string) AddResult {
 		}
 		icon := writeIcon(path)
 		storedPath := path
+		storedWorkDir := filepath.Dir(path)
 		if !a.store.Settings.AbsolutePaths {
 			storedPath = toStoredPath(path)
+			storedWorkDir = toStoredPath(storedWorkDir)
 		}
 		item := &AppItem{
-			GUID: uuid.NewString(),
-			Name: defaultTitle(path),
-			Path: storedPath,
-			Icon: icon,
+			GUID:       uuid.NewString(),
+			Name:       defaultTitle(path),
+			Path:       storedPath,
+			WorkingDir: storedWorkDir,
+			Icon:       icon,
 		}
 		items = append(items, item)
 		icons[item.GUID] = a.iconURL(icon)
@@ -376,6 +379,26 @@ func (a *App) ConvertToRelative() error {
 	}
 	a.writeStore()
 	return nil
+}
+
+func (a *App) PickFile(initialDir string) (string, error) {
+	if initialDir == "" {
+		initialDir = absBase
+	}
+	return runtime.OpenFileDialog(a.ctx, runtime.OpenDialogOptions{
+		Title:            "Select File",
+		DefaultDirectory: initialDir,
+	})
+}
+
+func (a *App) PickDirectory(initialDir string) (string, error) {
+	if initialDir == "" {
+		initialDir = absBase
+	}
+	return runtime.OpenDirectoryDialog(a.ctx, runtime.OpenDialogOptions{
+		Title:            "Select Folder",
+		DefaultDirectory: initialDir,
+	})
 }
 
 func (a *App) ChangeIcon(guid string) (IconResult, error) {
@@ -485,11 +508,16 @@ func (a *App) launch(guid string) error {
 		return nil
 	}
 	autoMinimize := a.store.Settings.AutoMinimize
+	workingDir := ""
+	if item.WorkingDir != "" {
+		workingDir = absPath(item.WorkingDir)
+	}
+	args := splitArgs(item.Args)
 	a.mu.Unlock()
 
 	if isExecutable(path) {
 		p := &runningProc{}
-		if err := startTracked(path, p); err != nil {
+		if err := startTracked(path, args, workingDir, p); err != nil {
 			return err
 		}
 		a.mu.Lock()

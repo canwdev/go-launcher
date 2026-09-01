@@ -5,6 +5,7 @@ package main
 import (
 	"errors"
 	"os/exec"
+	"strings"
 	"syscall"
 	"time"
 	"unsafe"
@@ -37,7 +38,7 @@ type shellExecuteInfo struct {
 
 var shellExecuteExProc = syscall.NewLazyDLL("shell32.dll").NewProc("ShellExecuteExW")
 
-func shellExecuteEx(verb, path string) (windows.Handle, error) {
+func shellExecuteEx(verb, path, params, dir string) (windows.Handle, error) {
 	verbPtr, err := windows.UTF16PtrFromString(verb)
 	if err != nil {
 		return 0, err
@@ -46,11 +47,26 @@ func shellExecuteEx(verb, path string) (windows.Handle, error) {
 	if err != nil {
 		return 0, err
 	}
+	var paramsPtr, dirPtr *uint16
+	if params != "" {
+		paramsPtr, err = windows.UTF16PtrFromString(params)
+		if err != nil {
+			return 0, err
+		}
+	}
+	if dir != "" {
+		dirPtr, err = windows.UTF16PtrFromString(dir)
+		if err != nil {
+			return 0, err
+		}
+	}
 	info := &shellExecuteInfo{
-		fMask:  seeMaskNoCloseProcess,
-		lpVerb: verbPtr,
-		lpFile: filePtr,
-		nShow:  swShowNormal,
+		fMask:        seeMaskNoCloseProcess,
+		lpVerb:       verbPtr,
+		lpFile:       filePtr,
+		lpParameters: paramsPtr,
+		lpDirectory:  dirPtr,
+		nShow:        swShowNormal,
 	}
 	info.cbSize = uint32(unsafe.Sizeof(*info))
 	r1, _, callErr := shellExecuteExProc.Call(uintptr(unsafe.Pointer(info)))
@@ -61,7 +77,7 @@ func shellExecuteEx(verb, path string) (windows.Handle, error) {
 }
 
 func openWithDefaultHandler(path string) error {
-	h, err := shellExecuteEx("open", path)
+	h, err := shellExecuteEx("open", path, "", "")
 	if h != 0 {
 		_ = windows.CloseHandle(h)
 	}
@@ -72,13 +88,25 @@ func revealFile(path string) error {
 	return exec.Command("explorer", "/select,"+path).Start()
 }
 
-func startTracked(path string, proc *runningProc) error {
-	h, err := shellExecuteEx("open", path)
+func joinArgsForShell(args []string) string {
+	parts := make([]string, 0, len(args))
+	for _, a := range args {
+		if strings.ContainsAny(a, " \t") {
+			parts = append(parts, `"`+a+`"`)
+		} else {
+			parts = append(parts, a)
+		}
+	}
+	return strings.Join(parts, " ")
+}
+
+func startTracked(path string, args []string, workDir string, proc *runningProc) error {
+	h, err := shellExecuteEx("open", path, joinArgsForShell(args), workDir)
 	if err != nil {
 		if errors.Is(err, syscall.Errno(1223)) || errors.Is(err, syscall.Errno(5)) {
 			return err
 		}
-		h, err = shellExecuteEx("runas", path)
+		h, err = shellExecuteEx("runas", path, joinArgsForShell(args), workDir)
 		if err != nil {
 			return err
 		}

@@ -1,3 +1,5 @@
+import { showToast } from './composables/useToast'
+
 export function formatRuntime(ms: number): string {
   const total = Math.floor(ms / 1000)
   const d = Math.floor(total / 86400)
@@ -16,7 +18,7 @@ export function formatRuntime(ms: number): string {
 }
 
 export function showError(err: unknown): void {
-  alert(String(err))
+  showToast(String(err), 'error')
 }
 
 export function randomUUID(): string {
