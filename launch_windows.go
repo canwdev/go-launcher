@@ -4,6 +4,7 @@ package main
 
 import (
 	"errors"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"syscall"
@@ -77,11 +78,11 @@ func shellExecuteEx(verb, path, params, dir string) (windows.Handle, error) {
 }
 
 func openWithDefaultHandler(path string) error {
-	h, err := shellExecuteEx("open", path, "", "")
-	if h != 0 {
-		_ = windows.CloseHandle(h)
-	}
-	return err
+	// 通过 explorer.exe（Windows Shell）中转打开：打开请求会被转发给已运行的 shell
+	// 实例，由它在正常交互用户上下文里拉起目标程序（如 ImageGlass），彻底脱钩本进程
+	// 的 token/提权/环境/WebView2 上下文，避免 WebView2 初始化报 E_ACCESSDENIED。
+	// explorer.exe 仅接一个文件路径参数；普通路径不受其开关语义影响。
+	return exec.Command("explorer.exe", path).Start()
 }
 
 func revealFile(path string) error {

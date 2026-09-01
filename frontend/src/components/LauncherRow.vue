@@ -10,6 +10,7 @@ const props = defineProps<{
   iconUrl?: string
   running?: boolean
   runtimeMs?: number
+  gameMode?: boolean
   dragging?: boolean
   dragOver?: boolean
 }>()
@@ -72,7 +73,7 @@ async function run(action: () => Promise<void>) {
     >
     <span v-else class="h-7 w-7 shrink-0 object-contain" />
     <span class="min-w-0 flex-1 truncate" :title="item.name">{{ item.name }}</span>
-    <span class="shrink-0 text-gray-500 dark:text-gray-400">{{ runtimeText }}</span>
+    <span v-if="gameMode" class="shrink-0 text-gray-500 dark:text-gray-400">{{ runtimeText }}</span>
     <button
       class="rounded border px-2.5 py-1 cursor-pointer"
       :class="running ? 'border-red-600 bg-red-500 text-white hover:bg-red-600' : 'border-gray-400 bg-white hover:bg-gray-200 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 dark:hover:bg-gray-600'"

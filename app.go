@@ -38,7 +38,7 @@ type CategoryNode struct {
 }
 
 type Settings struct {
-	AutoMinimize  bool `json:"auto_minimize"`
+	GameMode      bool `json:"game_mode"`
 	AbsolutePaths bool `json:"absolute_paths"`
 }
 
@@ -130,7 +130,7 @@ func defaultStore() AppStore {
 		Categories: []CategoryNode{
 			{GUID: uuid.NewString(), Name: "Default", Slots: []*string{}},
 		},
-		Settings: Settings{AutoMinimize: true, AbsolutePaths: true},
+		Settings: Settings{GameMode: true, AbsolutePaths: true},
 	}
 }
 
@@ -618,13 +618,18 @@ func (a *App) launch(guid string) error {
 		a.mu.Unlock()
 		return nil
 	}
-	autoMinimize := a.store.Settings.AutoMinimize
+	gameMode := a.store.Settings.GameMode
 	workingDir := ""
 	if item.WorkingDir != "" {
 		workingDir = absPath(item.WorkingDir)
 	}
 	args := splitArgs(item.Args)
 	a.mu.Unlock()
+
+	// Game mode off: plain open only - no tracking, no timing, no window control.
+	if !gameMode {
+		return openFile(path)
+	}
 
 	if isExecutable(path) {
 		p := &runningProc{}
@@ -635,16 +640,14 @@ func (a *App) launch(guid string) error {
 		a.running[guid] = p
 		a.mu.Unlock()
 		a.emitState()
-		if autoMinimize {
-			runtime.WindowMinimise(a.ctx)
-		}
+		runtime.WindowMinimise(a.ctx)
 		go func() {
 			_ = p.wait()
 			elapsed := time.Since(p.start).Milliseconds()
 			a.mu.Lock()
 			a.runtimeStats[guid] += elapsed
 			delete(a.running, guid)
-			restore := a.store.Settings.AutoMinimize && len(a.running) == 0
+			restore := len(a.running) == 0
 			if p.cleanup != nil {
 				p.cleanup()
 			}

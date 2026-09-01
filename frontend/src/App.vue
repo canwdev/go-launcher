@@ -14,7 +14,7 @@ import { useTheme } from './composables/useTheme'
 import { useToast } from './composables/useToast'
 import { showError } from './utils'
 
-const { activeTab, state, store, addFilesInto, addTab, renameItem, removeItem, setActiveTab, moveTab, renameTab, removeTab, updateItemIcon, updateItem, batchUpdateIcons, save, refresh, setAutoMinimize, setAbsolutePaths, convertToAbsolute, convertToRelative } = useStore()
+const { activeTab, state, store, addFilesInto, addTab, renameItem, removeItem, setActiveTab, moveTab, renameTab, removeTab, updateItemIcon, updateItem, batchUpdateIcons, save, refresh, setGameMode, setAbsolutePaths, convertToAbsolute, convertToRelative } = useStore()
 const { theme, setTheme } = useTheme()
 const { toasts, showToast } = useToast()
 
@@ -26,11 +26,11 @@ const themeOptions = [
 
 const appMenuItems = [
   {
-    key: 'auto-minimize',
+    key: 'game-mode',
     toggle: true,
-    label: 'Auto-minimize window',
-    checked: () => store.value.settings.auto_minimize,
-    onClick: () => setAutoMinimize(!store.value.settings.auto_minimize),
+    label: 'Game mode',
+    checked: () => store.value.settings.game_mode,
+    onClick: () => setGameMode(!store.value.settings.game_mode),
   },
   {
     key: 'absolute-paths',
@@ -264,6 +264,7 @@ function onAddFiles() {
         :icon-url="state[row.item.guid]?.icon_url ?? ''" :running="state[row.item.guid]?.running ?? false"
         :runtime-ms="state[row.item.guid]?.runtime_ms ?? 0" :dragging="draggingIndex === index"
         :drag-over="dragOverIndex === index && draggingIndex !== null && draggingIndex !== index"
+        :game-mode="store.settings.game_mode"
         @rename="openItemRename(row.item)" @details="openItemEdit(row.item)" @delete="onDeleteRequested(row.item)"
         @refresh="refresh" @icondone="(icon, iconUrl) => onIconDone(icon, iconUrl, row.item)"
         @dragstart="onDragStart(index)" @dragover="onDragOver(index)" @drop="onDrop(index)" @dragend="onDragEnd"

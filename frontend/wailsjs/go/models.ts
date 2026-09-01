@@ -73,7 +73,7 @@ export namespace main {
 	    }
 	}
 	export class Settings {
-	    auto_minimize: boolean;
+	    game_mode: boolean;
 	    absolute_paths: boolean;
 	
 	    static createFrom(source: any = {}) {
@@ -82,7 +82,7 @@ export namespace main {
 	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.auto_minimize = source["auto_minimize"];
+	        this.game_mode = source["game_mode"];
 	        this.absolute_paths = source["absolute_paths"];
 	    }
 	}

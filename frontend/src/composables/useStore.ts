@@ -14,7 +14,7 @@ export interface Category {
 }
 
 export interface StoreSettings {
-  auto_minimize: boolean
+  game_mode: boolean
   absolute_paths: boolean
 }
 
@@ -30,7 +30,7 @@ function newStore(): Store {
   return {
     apps: {},
     categories: [],
-    settings: { auto_minimize: true, absolute_paths: true },
+    settings: { game_mode: true, absolute_paths: true },
   }
 }
 
@@ -227,8 +227,8 @@ export function useStore() {
     showToast(`Updated ${count} icon${count === 1 ? '' : 's'}`)
   }
 
-  async function setAutoMinimize(enabled: boolean) {
-    store.value.settings.auto_minimize = enabled
+  async function setGameMode(enabled: boolean) {
+    store.value.settings.game_mode = enabled
     await save()
   }
 
@@ -298,7 +298,7 @@ export function useStore() {
     updateItemIcon,
     updateItem,
     batchUpdateIcons,
-    setAutoMinimize,
+    setGameMode,
     setAbsolutePaths,
     convertToAbsolute,
     convertToRelative,
