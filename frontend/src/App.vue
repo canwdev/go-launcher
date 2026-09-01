@@ -80,6 +80,10 @@ const appMenuItems: MenuEntry[] = [
   },
 ]
 
+const draggingIndex = ref<number | null>(null)
+const dragFromIndex = ref<number | null>(null)
+const dragOverIndex = ref<number | null>(null)
+
 const rows = computed<{ item: AppItem, index: number }[]>(() => {
   const tab = activeTab.value
   if (!tab)
@@ -88,9 +92,6 @@ const rows = computed<{ item: AppItem, index: number }[]>(() => {
     .map((guid, index) => ({ item: guid ? store.value.apps[guid] : undefined, index }))
     .filter((x): x is { item: AppItem, index: number } => x.item != null)
 })
-
-const draggingIndex = ref<number | null>(null)
-const dragOverIndex = ref<number | null>(null)
 
 type ModalTarget = { kind: 'item', guid: string } | { kind: 'tab', guid: string }
 const modalTarget = ref<ModalTarget | null>(null)
@@ -162,30 +163,38 @@ function onIconDone(icon: string, iconUrl: string, item: AppItem) {
 }
 
 function onDragStart(index: number) {
+  const tab = activeTab.value
+  if (!tab)
+    return
+  dragFromIndex.value = index
   draggingIndex.value = index
   dragOverIndex.value = null
 }
 
 function onDragOver(index: number) {
+  if (draggingIndex.value === null)
+    return
   dragOverIndex.value = index
 }
 
-function onDrop(target: number) {
-  if (draggingIndex.value !== null && draggingIndex.value !== target) {
-    const tab = activeTab.value
-    if (!tab)
-      return
-    const list = rows.value
-    const [moved] = list.splice(draggingIndex.value, 1)
-    list.splice(target, 0, moved)
-    tab.slots = list.map(x => x.item.guid)
+function onDrop() {
+  const tab = activeTab.value
+  if (tab && dragFromIndex.value !== null && dragOverIndex.value !== null && dragFromIndex.value !== dragOverIndex.value) {
+    const slots = [...tab.slots]
+    const [guid] = slots.splice(dragFromIndex.value, 1)
+    slots.splice(dragOverIndex.value, 0, guid)
+    tab.slots = slots
     save()
   }
-  draggingIndex.value = null
-  dragOverIndex.value = null
+  resetDrag()
 }
 
 function onDragEnd() {
+  resetDrag()
+}
+
+function resetDrag() {
+  dragFromIndex.value = null
   draggingIndex.value = null
   dragOverIndex.value = null
 }
@@ -266,20 +275,26 @@ function onAddFiles() {
     </TabBar>
 
     <main class="flex-1 overflow-y-auto p-2">
-      <div v-if="rows.length === 0" class="p-5 text-center text-gray-500 dark:text-gray-400">
-        No files added yet. Click "Add Files" or drop files anywhere.{{ activeTab ? ` (tab: ${activeTab.name})` : '' }}
-      </div>
-      <LauncherRow
-        v-for="(row, index) in rows" :key="row.item.guid" :item="row.item"
-        :icon-url="state[row.item.guid]?.icon_url ?? ''" :running="state[row.item.guid]?.running ?? false"
-        :runtime-ms="state[row.item.guid]?.runtime_ms ?? 0" :dragging="draggingIndex === index"
-        :drag-over="dragOverIndex === index && draggingIndex !== null && draggingIndex !== index"
-        :game-mode="store.settings.game_mode"
-        @rename="openItemRename(row.item)" @details="openItemEdit(row.item)" @delete="onDeleteRequested(row.item)"
-        @refresh="refresh" @icondone="(icon, iconUrl) => onIconDone(icon, iconUrl, row.item)"
-        @edit-runtime="onEditRuntime(row.item.guid)"
-        @dragstart="onDragStart(index)" @dragover="onDragOver(index)" @drop="onDrop(index)" @dragend="onDragEnd"
-      />
+      <Transition name="fade" mode="out-in">
+        <div :key="activeTab?.guid ?? 'empty'" class="min-h-full">
+          <div v-if="rows.length === 0" class="p-5 text-center text-gray-500 dark:text-gray-400">
+            No files added yet. Click "Add Files" or drop files anywhere.{{ activeTab ? ` (tab: ${activeTab.name})` : '' }}
+          </div>
+          <TransitionGroup name="list">
+            <LauncherRow
+              v-for="(row, index) in rows" :key="row.item.guid" :item="row.item"
+              :icon-url="state[row.item.guid]?.icon_url ?? ''" :running="state[row.item.guid]?.running ?? false"
+              :runtime-ms="state[row.item.guid]?.runtime_ms ?? 0" :dragging="draggingIndex === index"
+              :drag-over="dragOverIndex === index && draggingIndex !== null && dragOverIndex !== draggingIndex"
+              :game-mode="store.settings.game_mode"
+              @rename="openItemRename(row.item)" @details="openItemEdit(row.item)" @delete="onDeleteRequested(row.item)"
+              @refresh="refresh" @icondone="(icon, iconUrl) => onIconDone(icon, iconUrl, row.item)"
+              @edit-runtime="onEditRuntime(row.item.guid)"
+              @dragstart="onDragStart(index)" @dragover="onDragOver(index)" @drop="onDrop" @dragend="onDragEnd"
+            />
+          </TransitionGroup>
+        </div>
+      </Transition>
     </main>
 
     <AppDialog :open="modalOpen" :title="modalTitle" @close="closeModal">

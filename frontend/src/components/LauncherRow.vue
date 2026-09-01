@@ -71,7 +71,7 @@ async function run(action: () => Promise<void>) {
     class="mb-1.5 flex select-none items-center gap-2.5 rounded border border-gray-300 bg-white px-2.5 py-1.5 dark:border-gray-700 dark:bg-gray-800"
     :class="{
       'opacity-40': dragging,
-      'border-blue-500': dragOver,
+      'ring-2 ring-blue-400': dragOver,
     }" @dblclick="onDoubleClick" @dragstart="emit('dragstart')" @dragover.prevent="emit('dragover')"
     @drop.prevent="emit('drop')" @dragend="emit('dragend')"
   >
