@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import type { Component } from 'vue'
 import type { AppItem } from './api'
+import type { Theme } from './composables/useTheme'
 import { Menu, MenuButton, MenuItem, MenuItems, TransitionRoot } from '@headlessui/vue'
-import { Check, Ellipsis, FolderOpen, FolderTree, Gamepad2, Images, Link, MapPin, Plus, RefreshCw } from '@lucide/vue'
+import { Check, Ellipsis, FolderOpen, Gamepad2, Images, Moon, Plus, RefreshCw, Sun, SunMoon } from '@lucide/vue'
 import { computed, ref } from 'vue'
 import { OpenDirectory } from './api'
 import AppDialog from './components/AppDialog.vue'
@@ -21,13 +22,17 @@ const { activeTab, state, store, addFilesInto, addTab, renameItem, removeItem, s
 const { theme, setTheme } = useTheme()
 const { toasts, showToast } = useToast()
 
-const themeOptions = [
-  { value: 'auto', label: 'Auto' },
-  { value: 'light', label: 'Light' },
-  { value: 'dark', label: 'Dark' },
-] as const
+const themeSequence: Theme[] = ['auto', 'light', 'dark']
+const themeIcon = computed(() => theme.value === 'dark' ? Moon : theme.value === 'light' ? Sun : SunMoon)
+const themeLabel = computed(() => theme.value[0].toUpperCase() + theme.value.slice(1))
 
-const appMenuItems: { key: string, toggle?: boolean, label: string, checked?: () => boolean, onClick: () => void, icon?: Component }[] = [
+function cycleTheme() {
+  const idx = themeSequence.indexOf(theme.value)
+  setTheme(themeSequence[(idx + 1) % themeSequence.length])
+}
+
+interface MenuEntry { key: string, divider?: boolean, toggle?: boolean, label?: string, checked?: () => boolean, onClick?: () => void, icon?: Component }
+const appMenuItems: MenuEntry[] = [
   {
     key: 'game-mode',
     toggle: true,
@@ -43,16 +48,7 @@ const appMenuItems: { key: string, toggle?: boolean, label: string, checked?: ()
     checked: () => store.value.settings.absolute_paths,
     onClick: () => setAbsolutePaths(!store.value.settings.absolute_paths),
   },
-  {
-    key: 'to-absolute',
-    label: 'Convert to absolute path',
-    onClick: () => convertToAbsolute(),
-  },
-  {
-    key: 'to-relative',
-    label: 'Convert to relative path',
-    onClick: () => convertToRelative(),
-  },
+  { key: 'divider-2', divider: true },
   {
     key: 'refresh',
     icon: RefreshCw,
@@ -64,6 +60,17 @@ const appMenuItems: { key: string, toggle?: boolean, label: string, checked?: ()
     icon: FolderOpen,
     label: 'Open program directory...',
     onClick: onOpenProgramDir,
+  },
+  { key: 'divider-1', divider: true },
+  {
+    key: 'to-absolute',
+    label: 'Convert to absolute path',
+    onClick: () => convertToAbsolute(),
+  },
+  {
+    key: 'to-relative',
+    label: 'Convert to relative path',
+    onClick: () => convertToRelative(),
   },
   {
     key: 'batch-icons',
@@ -215,6 +222,13 @@ function onAddFiles() {
           <Plus class="h-4 w-4" />
         </button>
 
+        <button
+          class="flex h-6 w-6 shrink-0 cursor-pointer items-center justify-center rounded text-gray-500 hover:bg-gray-200 dark:text-gray-300 dark:hover:bg-gray-700"
+          :title="`Theme: ${themeLabel}`" @click="cycleTheme"
+        >
+          <component :is="themeIcon" class="h-4 w-4" />
+        </button>
+
         <Menu as="div" class="relative">
           <MenuButton
             class="flex h-6 w-6 shrink-0 cursor-pointer items-center justify-center rounded text-gray-500 hover:bg-gray-200 dark:text-gray-300 dark:hover:bg-gray-700"
@@ -230,36 +244,21 @@ function onAddFiles() {
             <MenuItems
               class="absolute right-0 z-10 mt-1 w-56 origin-top-right rounded border border-gray-300 bg-white py-1 shadow-md focus:outline-none dark:border-gray-700 dark:bg-gray-800"
             >
-              <MenuItem v-for="item in appMenuItems" :key="item.key" v-slot="{ active }">
-                <button
-                  class="flex w-full items-center gap-2 px-3 py-1.5 text-left"
-                  :class="active ? 'bg-gray-100 dark:bg-gray-700' : ''" @click="item.onClick"
-                >
-                  <span class="inline-flex h-4 w-4 shrink-0 items-center justify-center text-gray-500 dark:text-gray-400">
-                    <component :is="item.icon" class="h-4 w-4" />
-                  </span>
-                  <span class="min-w-0 flex-1 truncate">{{ item.label }}</span>
-                  <Check v-if="item.toggle && item.checked?.()" class="h-4 w-4 shrink-0 text-blue-500" />
-                </button>
-              </MenuItem>
-              <div class="my-1 border-t border-gray-200 dark:border-gray-700" />
-              <p class="px-3 pb-1 pt-1.5 text-xs uppercase tracking-wide text-gray-400 dark:text-gray-500">
-                Theme
-              </p>
-              <MenuItem v-for="opt in themeOptions" :key="opt.value" v-slot="{ active }">
-                <button
-                  class="flex w-full items-center gap-2 px-3 py-1.5 text-left"
-                  :class="active ? 'bg-gray-100 dark:bg-gray-700' : ''" @click="setTheme(opt.value)"
-                >
-                  <span
-                    class="inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full border"
-                    :class="theme === opt.value ? 'border-blue-500' : 'border-gray-400 dark:border-gray-500'"
+              <template v-for="item in appMenuItems" :key="item.key">
+                <div v-if="item.divider" class="my-1 border-t border-gray-200 dark:border-gray-700" />
+                <MenuItem v-else v-slot="{ active }">
+                  <button
+                    class="flex w-full items-center gap-2 px-3 py-1.5 text-left"
+                    :class="active ? 'bg-gray-100 dark:bg-gray-700' : ''" @click="item.onClick?.()"
                   >
-                    <span v-if="theme === opt.value" class="h-2 w-2 rounded-full bg-blue-500" />
-                  </span>
-                  {{ opt.label }}
-                </button>
-              </MenuItem>
+                    <span v-if="item.icon" class="inline-flex h-4 w-4 shrink-0 items-center justify-center text-gray-500 dark:text-gray-400">
+                      <component :is="item.icon" class="h-4 w-4" />
+                    </span>
+                    <span class="min-w-0 flex-1 truncate">{{ item.label }}</span>
+                    <Check v-if="item.toggle && item.checked?.()" class="h-4 w-4 shrink-0 text-blue-500" />
+                  </button>
+                </MenuItem>
+              </template>
             </MenuItems>
           </TransitionRoot>
         </Menu>

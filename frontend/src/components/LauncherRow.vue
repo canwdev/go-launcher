@@ -43,8 +43,14 @@ async function onRun() {
   }
 }
 
-function onDoubleClick() {
+function onDoubleClick(e: MouseEvent) {
   if (props.running)
+    return
+  const target = e.target as HTMLElement | null
+  // Only launch when double-clicking non-interactive areas (not buttons / runtime edit).
+  if (target?.closest('button'))
+    return
+  if (target?.closest('[data-runtime-edit]'))
     return
   Launch(props.item.guid).catch(showError)
 }
@@ -76,14 +82,14 @@ async function run(action: () => Promise<void>) {
     <span v-else class="h-7 w-7 shrink-0 object-contain" />
     <span class="min-w-0 flex-1 truncate">{{ item.name }}</span>
     <span
-      v-if="gameMode" class="shrink-0 rounded px-0.5 text-gray-500 dark:text-gray-400"
+      v-if="gameMode" data-runtime-edit class="shrink-0 rounded px-0.5 text-gray-500 dark:text-gray-400"
       :class="running ? 'cursor-not-allowed' : 'cursor-pointer hover:text-blue-600 hover:underline dark:hover:text-blue-400'"
       :title="running ? 'Running — stop the program to edit runtime' : 'Click to edit runtime'"
       @click="!running && emit('edit-runtime')"
     >{{ runtimeText }}</span>
     <button
-      class="rounded border px-2.5 py-1 cursor-pointer"
-      :class="running ? 'border-red-600 bg-red-500 text-white hover:bg-red-600' : 'border-gray-400 bg-white hover:bg-gray-200 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 dark:hover:bg-gray-600'"
+      class="rounded px-2.5 py-1 cursor-pointer"
+      :class="running ? 'bg-red-500 text-white hover:bg-red-600' : 'text-gray-700 hover:bg-gray-200 dark:text-gray-100 dark:hover:bg-gray-700'"
       @click="onRun"
     >
       {{ running ? 'Stop' : 'Run' }}
@@ -91,7 +97,7 @@ async function run(action: () => Promise<void>) {
 
     <Menu as="div" class="relative">
       <MenuButton
-        class="cursor-pointer rounded border border-gray-400 bg-white px-2 py-1 hover:bg-gray-200 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 dark:hover:bg-gray-600"
+        class="cursor-pointer rounded p-1 text-gray-500 hover:bg-gray-200 dark:text-gray-300 dark:hover:bg-gray-700"
       >
         <Ellipsis class="h-4 w-4" />
       </MenuButton>
