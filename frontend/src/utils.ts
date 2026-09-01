@@ -40,3 +40,10 @@ export function debounce<T extends (...args: never[]) => unknown>(fn: T, delay: 
     timer = window.setTimeout(fn as () => void, delay, ...args)
   }
 }
+
+export function isAutoIcon(icon: string | undefined): boolean {
+  if (!icon)
+    return true
+  const norm = icon.replace(/\\/g, '/')
+  return norm.includes('/go-launcher-data/icons/')
+}

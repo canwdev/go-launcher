@@ -14,6 +14,14 @@ export function ChangeIcon(arg1) {
   return window['go']['main']['App']['ChangeIcon'](arg1);
 }
 
+export function ConvertItemToAbsolute(arg1) {
+  return window['go']['main']['App']['ConvertItemToAbsolute'](arg1);
+}
+
+export function ConvertItemToRelative(arg1) {
+  return window['go']['main']['App']['ConvertItemToRelative'](arg1);
+}
+
 export function ConvertToAbsolute() {
   return window['go']['main']['App']['ConvertToAbsolute']();
 }
@@ -40,6 +48,10 @@ export function PickDirectory(arg1) {
 
 export function PickFile(arg1) {
   return window['go']['main']['App']['PickFile'](arg1);
+}
+
+export function PickImageFile(arg1) {
+  return window['go']['main']['App']['PickImageFile'](arg1);
 }
 
 export function Reveal(arg1) {

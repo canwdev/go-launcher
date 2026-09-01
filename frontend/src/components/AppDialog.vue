@@ -54,16 +54,20 @@ const emit = defineEmits<{
         leave-from="opacity-100 scale-100"
         leave-to="opacity-0 scale-95"
       >
-        <div class="fixed inset-0 flex items-center justify-center p-4">
-          <DialogPanel class="w-[420px] max-w-full rounded-md bg-white p-4 dark:bg-gray-800 dark:text-gray-100">
-            <DialogTitle as="h3" class="mb-2.5 mt-0">
-              {{ title }}
-            </DialogTitle>
-            <slot />
-            <div class="mt-3 flex justify-end gap-2">
-              <slot name="actions" />
-            </div>
-          </DialogPanel>
+        <div class="fixed inset-0 overflow-y-auto">
+          <div class="flex min-h-full items-center justify-center p-4">
+            <DialogPanel
+              class="max-h-full w-[420px] max-w-full overflow-y-auto rounded-md bg-white p-4 dark:bg-gray-800 dark:text-gray-100"
+            >
+              <DialogTitle as="h3" class="mb-2.5 mt-0">
+                {{ title }}
+              </DialogTitle>
+              <slot />
+              <div class="mt-3 flex justify-end gap-2">
+                <slot name="actions" />
+              </div>
+            </DialogPanel>
+          </div>
         </div>
       </TransitionChild>
     </Dialog>

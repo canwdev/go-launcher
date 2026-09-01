@@ -1,8 +1,8 @@
 import type { AppData, AppItem, AppStore, ItemState } from '../api'
 import { onMounted, onUnmounted, ref } from 'vue'
 import { EventsOff, EventsOn, OnFileDrop } from '../../wailsjs/runtime/runtime'
-import { AddFiles, AddPaths, ConvertToAbsolute, ConvertToRelative, GetData, SaveData } from '../api'
-import { debounce, randomUUID, showError } from '../utils'
+import { AddFiles, AddPaths, ConvertToAbsolute, ConvertToRelative, GetData, SaveData, UpdateIcon } from '../api'
+import { debounce, isAutoIcon, randomUUID, showError } from '../utils'
 import { showToast } from './useToast'
 
 export type GridSlot = string | null
@@ -189,14 +189,15 @@ export function useStore() {
     await save()
   }
 
-  async function updateItemIcon(guid: string, icon: string, iconUrl: string) {
+  async function updateItemIcon(guid: string, icon: string, iconUrl: string, silent = false) {
     const app = store.value.apps[guid]
     if (!app)
       return
     app.icon = icon
     state.value[guid] = { ...state.value[guid], icon_url: iconUrl }
     await save()
-    showToast('Icon updated')
+    if (!silent)
+      showToast('Icon updated')
   }
 
   async function updateItem(guid: string, fields: Partial<AppItem>) {
@@ -204,8 +205,26 @@ export function useStore() {
     if (!app)
       return
     Object.assign(app, fields)
-    await save()
+    await saveNow()
+    await refresh()
     showToast('Item updated')
+  }
+
+  async function batchUpdateIcons() {
+    let count = 0
+    for (const app of Object.values(store.value.apps)) {
+      if (!isAutoIcon(app.icon))
+        continue
+      try {
+        const res = await UpdateIcon(app.guid)
+        await updateItemIcon(app.guid, res.icon, res.icon_url, true)
+        count++
+      }
+      catch {
+        // skip items whose icon cannot be regenerated
+      }
+    }
+    showToast(`Updated ${count} icon${count === 1 ? '' : 's'}`)
   }
 
   async function setAutoMinimize(enabled: boolean) {
@@ -278,6 +297,7 @@ export function useStore() {
     renameItem,
     updateItemIcon,
     updateItem,
+    batchUpdateIcons,
     setAutoMinimize,
     setAbsolutePaths,
     convertToAbsolute,

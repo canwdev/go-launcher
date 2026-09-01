@@ -8,6 +8,10 @@ export function AddPaths(arg1:Array<string>):Promise<main.AddResult>;
 
 export function ChangeIcon(arg1:string):Promise<main.IconResult>;
 
+export function ConvertItemToAbsolute(arg1:string):Promise<void>;
+
+export function ConvertItemToRelative(arg1:string):Promise<void>;
+
 export function ConvertToAbsolute():Promise<void>;
 
 export function ConvertToRelative():Promise<void>;
@@ -21,6 +25,8 @@ export function OpenDirectory(arg1:string):Promise<void>;
 export function PickDirectory(arg1:string):Promise<string>;
 
 export function PickFile(arg1:string):Promise<string>;
+
+export function PickImageFile(arg1:string):Promise<string>;
 
 export function Reveal(arg1:string):Promise<void>;
 

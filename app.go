@@ -11,6 +11,7 @@ import (
 	"image/png"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -209,12 +210,14 @@ type App struct {
 
 func NewApp() *App {
 	_ = os.MkdirAll(filepath.Join(absBase, dataDir), 0755)
-	return &App{
+	app := &App{
 		store:        loadStore(),
 		runtimeStats: map[string]int64{},
 		running:      map[string]*runningProc{},
 		iconCache:    map[string]string{},
 	}
+	app.pruneIconFiles()
+	return app
 }
 
 func (a *App) startup(ctx context.Context) {
@@ -255,9 +258,26 @@ func (a *App) iconURL(rel string) string {
 	if err != nil {
 		return ""
 	}
-	url := "data:image/png;base64," + base64.StdEncoding.EncodeToString(data)
+	url := "data:" + mimeTypeForIcon(rel) + ";base64," + base64.StdEncoding.EncodeToString(data)
 	a.iconCache[rel] = url
 	return url
+}
+
+func mimeTypeForIcon(path string) string {
+	switch strings.ToLower(filepath.Ext(path)) {
+	case ".jpg", ".jpeg":
+		return "image/jpeg"
+	case ".gif":
+		return "image/gif"
+	case ".bmp":
+		return "image/bmp"
+	case ".webp":
+		return "image/webp"
+	case ".svg":
+		return "image/svg+xml"
+	default:
+		return "image/png"
+	}
 }
 
 func (a *App) buildState() map[string]ItemState {
@@ -306,7 +326,30 @@ func (a *App) SaveData(store AppStore) error {
 	}
 	a.store = store
 	a.writeStore()
+	a.pruneIconFiles()
 	return nil
+}
+
+func (a *App) pruneIconFiles() {
+	referenced := make(map[string]bool)
+	for _, app := range a.store.Apps {
+		if app != nil && app.Icon != "" {
+			referenced[filepath.Base(app.Icon)] = true
+		}
+	}
+	entries, err := os.ReadDir(filepath.Join(absBase, iconsDir))
+	if err != nil {
+		return
+	}
+	for _, e := range entries {
+		if e.IsDir() {
+			continue
+		}
+		if referenced[e.Name()] {
+			continue
+		}
+		_ = os.Remove(filepath.Join(absBase, iconsDir, e.Name()))
+	}
 }
 
 func (a *App) AddFiles() AddResult {
@@ -355,14 +398,38 @@ func (a *App) AddPaths(paths []string) AddResult {
 	return AddResult{Items: items, Icons: icons}
 }
 
+func convertItemPaths(item *AppItem, absolute bool) {
+	if item == nil {
+		return
+	}
+	if absolute {
+		if item.Path != "" {
+			item.Path = absPath(item.Path)
+		}
+		if item.WorkingDir != "" {
+			item.WorkingDir = absPath(item.WorkingDir)
+		}
+		if item.Icon != "" {
+			item.Icon = absPath(item.Icon)
+		}
+		return
+	}
+	if item.Path != "" {
+		item.Path = toStoredPath(absPath(item.Path))
+	}
+	if item.WorkingDir != "" {
+		item.WorkingDir = toStoredPath(absPath(item.WorkingDir))
+	}
+	if item.Icon != "" {
+		item.Icon = toStoredPath(absPath(item.Icon))
+	}
+}
+
 func (a *App) ConvertToAbsolute() error {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	for _, app := range a.store.Apps {
-		if app == nil {
-			continue
-		}
-		app.Path = absPath(app.Path)
+		convertItemPaths(app, true)
 	}
 	a.writeStore()
 	return nil
@@ -372,11 +439,28 @@ func (a *App) ConvertToRelative() error {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	for _, app := range a.store.Apps {
-		if app == nil {
-			continue
-		}
-		app.Path = toStoredPath(absPath(app.Path))
+		convertItemPaths(app, false)
 	}
+	a.writeStore()
+	return nil
+}
+
+func (a *App) ConvertItemToAbsolute(guid string) error {
+	return a.convertItem(guid, true)
+}
+
+func (a *App) ConvertItemToRelative(guid string) error {
+	return a.convertItem(guid, false)
+}
+
+func (a *App) convertItem(guid string, absolute bool) error {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	item := a.findItem(guid)
+	if item == nil {
+		return fmt.Errorf("invalid item guid %q", guid)
+	}
+	convertItemPaths(item, absolute)
 	a.writeStore()
 	return nil
 }
@@ -388,6 +472,19 @@ func (a *App) PickFile(initialDir string) (string, error) {
 	return runtime.OpenFileDialog(a.ctx, runtime.OpenDialogOptions{
 		Title:            "Select File",
 		DefaultDirectory: initialDir,
+	})
+}
+
+func (a *App) PickImageFile(initialDir string) (string, error) {
+	if initialDir == "" {
+		initialDir = absBase
+	}
+	return runtime.OpenFileDialog(a.ctx, runtime.OpenDialogOptions{
+		Title:            "Select Image",
+		DefaultDirectory: initialDir,
+		Filters: []runtime.FileFilter{
+			{DisplayName: "Images (*.png;*.jpg;*.jpeg;*.gif;*.bmp;*.webp;*.svg)", Pattern: "*.png;*.jpg;*.jpeg;*.gif;*.bmp;*.webp;*.svg"},
+		},
 	})
 }
 
@@ -429,7 +526,7 @@ func (a *App) ChangeIcon(guid string) (IconResult, error) {
 	selection, err := runtime.OpenFileDialog(a.ctx, runtime.OpenDialogOptions{
 		Title: "Change Icon",
 		Filters: []runtime.FileFilter{
-			{DisplayName: "Images (*.png;*.jpg;*.jpeg;*.gif;*.bmp)", Pattern: "*.png;*.jpg;*.jpeg;*.gif;*.bmp"},
+			{DisplayName: "Images (*.png;*.jpg;*.jpeg;*.gif;*.bmp;*.webp;*.svg)", Pattern: "*.png;*.jpg;*.jpeg;*.gif;*.bmp;*.webp;*.svg"},
 		},
 	})
 	if err != nil {

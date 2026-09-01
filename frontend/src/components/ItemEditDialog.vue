@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { AppItem } from '../api'
 import { ref, watch } from 'vue'
-import { PickDirectory, PickFile } from '../api'
+import { PickDirectory, PickFile, PickImageFile } from '../api'
 import AppDialog from './AppDialog.vue'
 
 const props = defineProps<{
@@ -11,13 +11,14 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   close: []
-  save: [guid: string, fields: { name: string, path: string, args: string, working_dir: string }]
+  save: [guid: string, fields: { name: string, path: string, args: string, working_dir: string, icon: string }]
 }>()
 
 const name = ref('')
 const path = ref('')
 const args = ref('')
 const workingDir = ref('')
+const icon = ref('')
 
 watch(
   () => [props.open, props.item] as const,
@@ -28,6 +29,7 @@ watch(
     path.value = props.item.path ?? ''
     args.value = props.item.args ?? ''
     workingDir.value = props.item.working_dir ?? ''
+    icon.value = props.item.icon ?? ''
   },
 )
 
@@ -49,6 +51,12 @@ async function browseDir() {
     workingDir.value = sel
 }
 
+async function browseIcon() {
+  const sel = await PickImageFile(icon.value ? dirname(icon.value) : dirname(path.value))
+  if (sel)
+    icon.value = sel
+}
+
 function onSave() {
   if (!props.item)
     return
@@ -57,6 +65,7 @@ function onSave() {
     path: path.value.trim(),
     args: args.value.trim(),
     working_dir: workingDir.value.trim(),
+    icon: icon.value.trim(),
   })
   emit('close')
 }
@@ -119,6 +128,30 @@ function onSave() {
             @click="browseDir"
           >
             Browse…
+          </button>
+        </div>
+      </label>
+
+      <label class="flex flex-col gap-1">
+        <span class="text-xs text-gray-500 dark:text-gray-400">Icon</span>
+        <div class="flex gap-1">
+          <input
+            v-model="icon" type="text" placeholder="auto-generated"
+            class="flex-1 rounded border border-gray-400 px-1.5 py-1 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100"
+          >
+          <button
+            type="button"
+            class="shrink-0 rounded border border-gray-400 bg-white px-2 py-1 text-xs hover:bg-gray-200 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 dark:hover:bg-gray-600"
+            @click="browseIcon"
+          >
+            Browse…
+          </button>
+          <button
+            type="button"
+            class="shrink-0 rounded border border-gray-400 bg-white px-2 py-1 text-xs hover:bg-gray-200 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 dark:hover:bg-gray-600"
+            @click="icon = ''"
+          >
+            Clear
           </button>
         </div>
       </label>
