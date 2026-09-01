@@ -37,7 +37,8 @@ type CategoryNode struct {
 }
 
 type Settings struct {
-	AutoMinimize bool `json:"auto_minimize"`
+	AutoMinimize  bool `json:"auto_minimize"`
+	AbsolutePaths bool `json:"absolute_paths"`
 }
 
 type AppStore struct {
@@ -126,7 +127,7 @@ func defaultStore() AppStore {
 		Categories: []CategoryNode{
 			{GUID: uuid.NewString(), Name: "Default", Slots: []*string{}},
 		},
-		Settings: Settings{AutoMinimize: true},
+		Settings: Settings{AutoMinimize: true, AbsolutePaths: true},
 	}
 }
 
@@ -332,16 +333,46 @@ func (a *App) AddPaths(paths []string) AddResult {
 			continue
 		}
 		icon := writeIcon(path)
+		storedPath := path
+		if !a.store.Settings.AbsolutePaths {
+			storedPath = toStoredPath(path)
+		}
 		item := &AppItem{
 			GUID: uuid.NewString(),
 			Name: defaultTitle(path),
-			Path: toStoredPath(path),
+			Path: storedPath,
 			Icon: icon,
 		}
 		items = append(items, item)
 		icons[item.GUID] = a.iconURL(icon)
 	}
 	return AddResult{Items: items, Icons: icons}
+}
+
+func (a *App) ConvertToAbsolute() error {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	for _, app := range a.store.Apps {
+		if app == nil {
+			continue
+		}
+		app.Path = absPath(app.Path)
+	}
+	a.writeStore()
+	return nil
+}
+
+func (a *App) ConvertToRelative() error {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	for _, app := range a.store.Apps {
+		if app == nil {
+			continue
+		}
+		app.Path = toStoredPath(absPath(app.Path))
+	}
+	a.writeStore()
+	return nil
 }
 
 func (a *App) ChangeIcon(guid string) (IconResult, error) {

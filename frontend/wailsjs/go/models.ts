@@ -74,6 +74,7 @@ export namespace main {
 	}
 	export class Settings {
 	    auto_minimize: boolean;
+	    absolute_paths: boolean;
 	
 	    static createFrom(source: any = {}) {
 	        return new Settings(source);
@@ -82,6 +83,7 @@ export namespace main {
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.auto_minimize = source["auto_minimize"];
+	        this.absolute_paths = source["absolute_paths"];
 	    }
 	}
 	export class CategoryNode {

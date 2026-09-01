@@ -1,8 +1,9 @@
 import type { AppData, AppItem, AppStore, ItemState } from '../api'
 import { onMounted, onUnmounted, ref } from 'vue'
 import { EventsOff, EventsOn, OnFileDrop } from '../../wailsjs/runtime/runtime'
-import { AddFiles, AddPaths, GetData, SaveData } from '../api'
+import { AddFiles, AddPaths, ConvertToAbsolute, ConvertToRelative, GetData, SaveData } from '../api'
 import { debounce, randomUUID, showError } from '../utils'
+import { showToast } from './useToast'
 
 export type GridSlot = string | null
 
@@ -14,6 +15,7 @@ export interface Category {
 
 export interface StoreSettings {
   auto_minimize: boolean
+  absolute_paths: boolean
 }
 
 export interface Store {
@@ -28,7 +30,7 @@ function newStore(): Store {
   return {
     apps: {},
     categories: [],
-    settings: { auto_minimize: true },
+    settings: { auto_minimize: true, absolute_paths: true },
   }
 }
 
@@ -185,11 +187,39 @@ export function useStore() {
     app.icon = icon
     state.value[guid] = { ...state.value[guid], icon_url: iconUrl }
     await save()
+    showToast('Icon updated')
   }
 
   async function setAutoMinimize(enabled: boolean) {
     store.value.settings.auto_minimize = enabled
     await save()
+  }
+
+  async function setAbsolutePaths(enabled: boolean) {
+    store.value.settings.absolute_paths = enabled
+    await save()
+  }
+
+  async function convertToAbsolute() {
+    try {
+      await ConvertToAbsolute()
+      await refresh()
+      showToast('Converted to absolute path')
+    }
+    catch (err) {
+      showError(err)
+    }
+  }
+
+  async function convertToRelative() {
+    try {
+      await ConvertToRelative()
+      await refresh()
+      showToast('Converted to relative path')
+    }
+    catch (err) {
+      showError(err)
+    }
   }
 
   function onDrop(_x: number, _y: number, paths: string[]) {
@@ -230,5 +260,8 @@ export function useStore() {
     renameItem,
     updateItemIcon,
     setAutoMinimize,
+    setAbsolutePaths,
+    convertToAbsolute,
+    convertToRelative,
   }
 }

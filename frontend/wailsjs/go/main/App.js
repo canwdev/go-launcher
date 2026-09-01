@@ -14,6 +14,14 @@ export function ChangeIcon(arg1) {
   return window['go']['main']['App']['ChangeIcon'](arg1);
 }
 
+export function ConvertToAbsolute() {
+  return window['go']['main']['App']['ConvertToAbsolute']();
+}
+
+export function ConvertToRelative() {
+  return window['go']['main']['App']['ConvertToRelative']();
+}
+
 export function GetData() {
   return window['go']['main']['App']['GetData']();
 }

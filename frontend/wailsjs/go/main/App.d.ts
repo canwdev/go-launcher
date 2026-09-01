@@ -8,6 +8,10 @@ export function AddPaths(arg1:Array<string>):Promise<main.AddResult>;
 
 export function ChangeIcon(arg1:string):Promise<main.IconResult>;
 
+export function ConvertToAbsolute():Promise<void>;
+
+export function ConvertToRelative():Promise<void>;
+
 export function GetData():Promise<main.AppData>;
 
 export function Launch(arg1:string):Promise<void>;
