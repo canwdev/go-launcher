@@ -10,7 +10,7 @@ import { useStore } from './composables/useStore'
 import { useTheme } from './composables/useTheme'
 import { showError } from './utils'
 
-const { activeTab, store, addFilesInto, addTab, renameItem, removeItem, setActiveTab, moveTab, renameTab, removeTab, updateItemIcon, save } = useStore()
+const { activeTab, state, store, addFilesInto, addTab, renameItem, removeItem, setActiveTab, moveTab, renameTab, removeTab, updateItemIcon, save } = useStore()
 const { theme, setTheme } = useTheme()
 
 const themeOptions = [
@@ -24,8 +24,8 @@ const rows = computed<{ item: AppItem, index: number }[]>(() => {
   if (!tab)
     return []
   return tab.slots
-    .map((slot, index) => ({ item: slot, index }))
-    .filter(x => x.item !== null) as { item: AppItem, index: number }[]
+    .map((guid, index) => ({ item: guid ? store.value.apps[guid] : undefined, index }))
+    .filter((x): x is { item: AppItem, index: number } => x.item != null)
 })
 
 const draggingIndex = ref<number | null>(null)
@@ -98,8 +98,8 @@ function onConfirm() {
   confirmAction.value = null
 }
 
-function onIconDone(icon: string, item: AppItem) {
-  updateItemIcon(item.guid, icon).catch(showError)
+function onIconDone(icon: string, iconUrl: string, item: AppItem) {
+  updateItemIcon(item.guid, icon, iconUrl).catch(showError)
 }
 
 function onDragStart(index: number) {
@@ -119,7 +119,7 @@ function onDrop(target: number) {
     const list = rows.value
     const [moved] = list.splice(draggingIndex.value, 1)
     list.splice(target, 0, moved)
-    tab.slots = list.map(x => x.item)
+    tab.slots = list.map(x => x.item.guid)
     save()
   }
   draggingIndex.value = null
@@ -195,8 +195,8 @@ function onAddFiles() {
     </header>
 
     <TabBar
-      :tabs="store.tabs"
-      :active-guid="store.active_tab_guid"
+      :tabs="store.categories"
+      :active-guid="activeTab?.guid ?? ''"
       @add="addTab().catch(showError)"
       @select="setActiveTab"
       @rename="openTabRename"
@@ -210,11 +210,14 @@ function onAddFiles() {
       </div>
       <LauncherRow
         v-for="(row, index) in rows" :key="row.item.guid" :item="row.item"
+        :icon-url="state[row.item.guid]?.icon_url ?? ''"
+        :running="state[row.item.guid]?.running ?? false"
+        :runtime-ms="state[row.item.guid]?.runtime_ms ?? 0"
         :dragging="draggingIndex === index"
         :drag-over="dragOverIndex === index && draggingIndex !== null && draggingIndex !== index"
         @rename="openItemRename(row.item)" @details="openItemDetails(row.item)"
         @delete="onDeleteRequested(row.item)"
-        @icondone="icon => onIconDone(icon, row.item)"
+        @icondone="(icon, iconUrl) => onIconDone(icon, iconUrl, row.item)"
         @dragstart="onDragStart(index)" @dragover="onDragOver(index)" @drop="onDrop(index)" @dragend="onDragEnd"
       />
     </main>

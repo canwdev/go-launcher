@@ -28,14 +28,12 @@ type AppItem struct {
 	RuntimeMs  int64  `json:"runtime_ms,omitempty"`
 	Args       string `json:"args,omitempty"`
 	WorkingDir string `json:"working_dir,omitempty"`
-	IconURL    string `json:"iconURL,omitempty"`
-	Running    bool   `json:"running,omitempty"`
 }
 
-type Tab struct {
-	GUID  string     `json:"guid"`
-	Name  string     `json:"name"`
-	Slots []*AppItem `json:"slots"`
+type CategoryNode struct {
+	GUID  string    `json:"guid"`
+	Name  string    `json:"name"`
+	Slots []*string `json:"slots"` // nil = empty cell, otherwise an app guid
 }
 
 type Settings struct {
@@ -43,10 +41,30 @@ type Settings struct {
 }
 
 type AppStore struct {
-	Version       string   `json:"version"`
-	ActiveTabGUID string   `json:"active_tab_guid"`
-	Tabs          []Tab    `json:"tabs"`
-	Settings      Settings `json:"settings"`
+	Apps       map[string]*AppItem `json:"apps"` // global app pool
+	Categories []CategoryNode      `json:"categories"`
+	Settings   Settings            `json:"settings"`
+}
+
+type ItemState struct {
+	Running   bool   `json:"running"`
+	RuntimeMs int64  `json:"runtime_ms"`
+	IconURL   string `json:"icon_url,omitempty"`
+}
+
+type AppData struct {
+	Store AppStore             `json:"store"`
+	State map[string]ItemState `json:"state"`
+}
+
+type AddResult struct {
+	Items []*AppItem        `json:"items"`
+	Icons map[string]string `json:"icons"`
+}
+
+type IconResult struct {
+	Icon    string `json:"icon"`
+	IconURL string `json:"icon_url"`
 }
 
 type runningProc struct {
@@ -104,9 +122,9 @@ func writeIcon(path string) string {
 
 func defaultStore() AppStore {
 	return AppStore{
-		Version: "1",
-		Tabs: []Tab{
-			{GUID: uuid.NewString(), Name: "Default", Slots: []*AppItem{}},
+		Apps: map[string]*AppItem{},
+		Categories: []CategoryNode{
+			{GUID: uuid.NewString(), Name: "Default", Slots: []*string{}},
 		},
 		Settings: Settings{AutoMinimize: true},
 	}
@@ -121,34 +139,37 @@ func loadStore() AppStore {
 	if err := json.Unmarshal(data, &store); err != nil {
 		return defaultStore()
 	}
-	if store.Version == "" {
-		store.Version = "1"
+	if store.Apps == nil {
+		store.Apps = map[string]*AppItem{}
 	}
-	if len(store.Tabs) == 0 {
-		store.Tabs = []Tab{{GUID: uuid.NewString(), Name: "Default", Slots: []*AppItem{}}}
+	if len(store.Apps) == 0 && len(store.Categories) == 0 {
+		return defaultStore()
 	}
-	for i := range store.Tabs {
-		if store.Tabs[i].GUID == "" {
-			store.Tabs[i].GUID = uuid.NewString()
+	for guid, app := range store.Apps {
+		if app == nil {
+			continue
 		}
-		if store.Tabs[i].Name == "" {
-			store.Tabs[i].Name = "Tab"
+		app.Path = normalizePath(app.Path)
+		if app.GUID == "" {
+			app.GUID = guid
 		}
-		if store.Tabs[i].Slots == nil {
-			store.Tabs[i].Slots = []*AppItem{}
+		if app.Name == "" {
+			app.Name = defaultTitle(absPath(app.Path))
 		}
-		for j := range store.Tabs[i].Slots {
-			slot := store.Tabs[i].Slots[j]
-			if slot == nil {
-				continue
-			}
-			slot.Path = normalizePath(slot.Path)
-			if slot.GUID == "" {
-				slot.GUID = uuid.NewString()
-			}
-			if slot.Name == "" {
-				slot.Name = defaultTitle(absPath(slot.Path))
-			}
+	}
+	if len(store.Categories) == 0 {
+		store.Categories = []CategoryNode{{GUID: uuid.NewString(), Name: "Default", Slots: []*string{}}}
+	}
+	for i := range store.Categories {
+		cat := &store.Categories[i]
+		if cat.GUID == "" {
+			cat.GUID = uuid.NewString()
+		}
+		if cat.Name == "" {
+			cat.Name = "Category"
+		}
+		if cat.Slots == nil {
+			cat.Slots = []*string{}
 		}
 	}
 	return store
@@ -167,23 +188,7 @@ func writeStoreAtomic(store AppStore) error {
 }
 
 func (a *App) findItem(guid string) *AppItem {
-	for i := range a.store.Tabs {
-		for _, slot := range a.store.Tabs[i].Slots {
-			if slot != nil && slot.GUID == guid {
-				return slot
-			}
-		}
-	}
-	return nil
-}
-
-func (a *App) findTab(guid string) *Tab {
-	for i := range a.store.Tabs {
-		if a.store.Tabs[i].GUID == guid {
-			return &a.store.Tabs[i]
-		}
-	}
-	return nil
+	return a.store.Apps[guid]
 }
 
 func openFile(path string) error {
@@ -214,7 +219,7 @@ func (a *App) startup(ctx context.Context) {
 		tick := time.NewTicker(30 * time.Second)
 		defer tick.Stop()
 		for range tick.C {
-			a.emitUpdated()
+			a.emitState()
 		}
 	}()
 }
@@ -222,15 +227,17 @@ func (a *App) startup(ctx context.Context) {
 func (a *App) shutdown(_ context.Context) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	a.injectRuntime()
 	a.writeStore()
 }
 
-func (a *App) emitUpdated() {
+func (a *App) emitState() {
 	if a.ctx == nil {
 		return
 	}
-	runtime.EventsEmit(a.ctx, "items:updated")
+	a.mu.Lock()
+	state := a.buildState()
+	a.mu.Unlock()
+	runtime.EventsEmit(a.ctx, "state:updated", state)
 }
 
 func (a *App) iconURL(rel string) string {
@@ -249,61 +256,48 @@ func (a *App) iconURL(rel string) string {
 	return url
 }
 
-func (a *App) injectRuntime() {
-	for i := range a.store.Tabs {
-		for _, slot := range a.store.Tabs[i].Slots {
-			if slot == nil {
-				continue
-			}
-			slot.IconURL = a.iconURL(slot.Icon)
-			slot.Running = false
-			slot.RuntimeMs = a.runtimeStats[slot.GUID]
-			if p, ok := a.running[slot.GUID]; ok {
-				slot.Running = true
-				slot.RuntimeMs += time.Since(p.start).Milliseconds()
-			}
+func (a *App) buildState() map[string]ItemState {
+	state := make(map[string]ItemState, len(a.store.Apps))
+	for guid, app := range a.store.Apps {
+		if app == nil {
+			continue
 		}
-	}
-}
-
-func (a *App) clearTransient() {
-	for i := range a.store.Tabs {
-		for _, slot := range a.store.Tabs[i].Slots {
-			if slot == nil {
-				continue
-			}
-			slot.IconURL = ""
-			slot.Running = false
+		st := ItemState{IconURL: a.iconURL(app.Icon), RuntimeMs: a.runtimeStats[guid]}
+		if p, ok := a.running[guid]; ok {
+			st.Running = true
+			st.RuntimeMs += time.Since(p.start).Milliseconds()
 		}
+		state[guid] = st
 	}
+	return state
 }
 
 func (a *App) writeStore() {
+	for guid, ms := range a.runtimeStats {
+		if app := a.store.Apps[guid]; app != nil {
+			app.RuntimeMs = ms
+		}
+	}
 	_ = writeStoreAtomic(a.store)
 }
 
-func (a *App) GetData() AppStore {
+func (a *App) GetData() AppData {
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	a.injectRuntime()
-	return a.store
+	return AppData{Store: a.store, State: a.buildState()}
 }
 
 func (a *App) SaveData(store AppStore) error {
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	for i := range store.Tabs {
-		for _, slot := range store.Tabs[i].Slots {
-			if slot == nil {
-				continue
-			}
-			if val, ok := a.runtimeStats[slot.GUID]; ok {
-				slot.RuntimeMs = val
-			} else if slot.RuntimeMs > 0 {
-				a.runtimeStats[slot.GUID] = slot.RuntimeMs
-			}
-			slot.IconURL = ""
-			slot.Running = false
+	for guid, app := range store.Apps {
+		if app == nil {
+			continue
+		}
+		if ms, ok := a.runtimeStats[guid]; ok {
+			app.RuntimeMs = ms
+		} else {
+			a.runtimeStats[guid] = app.RuntimeMs
 		}
 	}
 	a.store = store
@@ -311,51 +305,51 @@ func (a *App) SaveData(store AppStore) error {
 	return nil
 }
 
-func (a *App) AddFiles() []AppItem {
+func (a *App) AddFiles() AddResult {
 	files, err := runtime.OpenMultipleFilesDialog(a.ctx, runtime.OpenDialogOptions{
 		Title: "Add Files",
 	})
 	if err != nil {
-		return nil
+		return AddResult{}
 	}
 	if len(files) == 0 {
-		return nil
+		return AddResult{}
 	}
 	return a.AddPaths(files)
 }
 
-func (a *App) AddPaths(paths []string) []AppItem {
+func (a *App) AddPaths(paths []string) AddResult {
 	if len(paths) == 0 {
-		return nil
+		return AddResult{}
 	}
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	items := make([]AppItem, 0, len(paths))
+	items := make([]*AppItem, 0, len(paths))
+	icons := make(map[string]string, len(paths))
 	for _, raw := range paths {
 		path := normalizePath(raw)
 		if path == "" {
 			continue
 		}
 		icon := writeIcon(path)
-		items = append(items, AppItem{
-			GUID:     uuid.NewString(),
-			Name:     defaultTitle(path),
-			Path:     toStoredPath(path),
-			Icon:     icon,
-			IconURL:  a.iconURL(icon),
-			Running:  false,
-			RuntimeMs: 0,
-		})
+		item := &AppItem{
+			GUID: uuid.NewString(),
+			Name: defaultTitle(path),
+			Path: toStoredPath(path),
+			Icon: icon,
+		}
+		items = append(items, item)
+		icons[item.GUID] = a.iconURL(icon)
 	}
-	return items
+	return AddResult{Items: items, Icons: icons}
 }
 
-func (a *App) ChangeIcon(guid string) (string, error) {
+func (a *App) ChangeIcon(guid string) (IconResult, error) {
 	a.mu.Lock()
 	item := a.findItem(guid)
 	if item == nil {
 		a.mu.Unlock()
-		return "", fmt.Errorf("invalid item guid %q", guid)
+		return IconResult{}, fmt.Errorf("invalid item guid %q", guid)
 	}
 	path := absPath(item.Path)
 	icon0 := item.Icon
@@ -368,30 +362,30 @@ func (a *App) ChangeIcon(guid string) (string, error) {
 		},
 	})
 	if err != nil {
-		return "", err
+		return IconResult{}, err
 	}
 	if selection == "" {
-		return icon0, nil
+		return IconResult{Icon: icon0, IconURL: a.iconURL(icon0)}, nil
 	}
 	f, err := os.Open(selection)
 	if err != nil {
-		return "", err
+		return IconResult{}, err
 	}
 	defer f.Close()
 	img, _, err := image.Decode(f)
 	if err != nil {
-		return "", fmt.Errorf("unsupported image: %v", err)
+		return IconResult{}, fmt.Errorf("unsupported image: %v", err)
 	}
 	icon := saveImage(img, filepath.Base(path)+"-custom")
 	if icon == "" {
-		return "", fmt.Errorf("failed to save icon")
+		return IconResult{}, fmt.Errorf("failed to save icon")
 	}
 
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	item = a.findItem(guid)
 	if item == nil {
-		return "", fmt.Errorf("invalid item guid %q", guid)
+		return IconResult{}, fmt.Errorf("invalid item guid %q", guid)
 	}
 	if old := item.Icon; old != "" {
 		_ = os.Remove(absPath(old))
@@ -399,29 +393,29 @@ func (a *App) ChangeIcon(guid string) (string, error) {
 	}
 	item.Icon = icon
 	a.writeStore()
-	return icon, nil
+	return IconResult{Icon: icon, IconURL: a.iconURL(icon)}, nil
 }
 
-func (a *App) UpdateIcon(guid string) (string, error) {
+func (a *App) UpdateIcon(guid string) (IconResult, error) {
 	a.mu.Lock()
 	item := a.findItem(guid)
 	if item == nil {
 		a.mu.Unlock()
-		return "", fmt.Errorf("invalid item guid %q", guid)
+		return IconResult{}, fmt.Errorf("invalid item guid %q", guid)
 	}
 	path := absPath(item.Path)
 	a.mu.Unlock()
 
 	icon := writeIcon(path)
 	if icon == "" {
-		return "", fmt.Errorf("failed to regenerate icon")
+		return IconResult{}, fmt.Errorf("failed to regenerate icon")
 	}
 
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	item = a.findItem(guid)
 	if item == nil {
-		return "", fmt.Errorf("invalid item guid %q", guid)
+		return IconResult{}, fmt.Errorf("invalid item guid %q", guid)
 	}
 	if old := item.Icon; old != "" {
 		_ = os.Remove(absPath(old))
@@ -429,7 +423,7 @@ func (a *App) UpdateIcon(guid string) (string, error) {
 	}
 	item.Icon = icon
 	a.writeStore()
-	return icon, nil
+	return IconResult{Icon: icon, IconURL: a.iconURL(icon)}, nil
 }
 
 func (a *App) Reveal(guid string) error {
@@ -467,7 +461,7 @@ func (a *App) launch(guid string) error {
 		a.mu.Lock()
 		a.running[guid] = p
 		a.mu.Unlock()
-		a.emitUpdated()
+		a.emitState()
 		if autoMinimize {
 			runtime.WindowMinimise(a.ctx)
 		}
@@ -483,7 +477,7 @@ func (a *App) launch(guid string) error {
 			}
 			a.writeStore()
 			a.mu.Unlock()
-			a.emitUpdated()
+			a.emitState()
 			if restore {
 				runtime.WindowUnminimise(a.ctx)
 			}
@@ -505,7 +499,7 @@ func (a *App) Stop(guid string) error {
 		if err := p.stop(); err != nil {
 			return err
 		}
-		a.emitUpdated()
+		a.emitState()
 	}
 	return nil
 }

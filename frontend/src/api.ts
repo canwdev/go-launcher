@@ -12,8 +12,12 @@ import {
 } from '../wailsjs/go/main/App'
 
 export type AppItem = main.AppItem
-export type Tab = main.Tab
+export type CategoryNode = main.CategoryNode
 export type AppStore = main.AppStore
+export type AppData = main.AppData
+export type ItemState = main.ItemState
+export type AddResult = main.AddResult
+export type IconResult = main.IconResult
 
 export {
   AddFiles,

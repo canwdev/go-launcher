@@ -1,142 +1,135 @@
-import type { AppItem, AppStore } from '../api'
+import type { AppData, AppItem, AppStore, ItemState } from '../api'
 import { onMounted, onUnmounted, ref } from 'vue'
 import { EventsOff, EventsOn, OnFileDrop } from '../../wailsjs/runtime/runtime'
 import { AddFiles, AddPaths, GetData, SaveData } from '../api'
 import { debounce, randomUUID, showError } from '../utils'
 
-export type GridSlot = AppItem | null
+export type GridSlot = string | null
 
-export interface StoreTab {
+export interface Category {
   guid: string
   name: string
   slots: GridSlot[]
 }
 
-interface StoreTabSettings {
+export interface StoreSettings {
   auto_minimize: boolean
 }
 
-interface Store {
-  version: string
-  active_tab_guid: string
-  tabs: StoreTab[]
-  settings: StoreTabSettings
+export interface Store {
+  apps: Record<string, AppItem>
+  categories: Category[]
+  settings: StoreSettings
 }
+
+const ACTIVE_TAB_KEY = 'launcher-active-tab'
 
 function newStore(): Store {
   return {
-    version: '1',
-    active_tab_guid: '',
-    tabs: [],
+    apps: {},
+    categories: [],
     settings: { auto_minimize: true },
   }
 }
 
+function loadActiveTab(): string {
+  return localStorage.getItem(ACTIVE_TAB_KEY) ?? ''
+}
+
 export function useStore() {
   const store = ref<Store>(newStore())
+  const state = ref<Record<string, ItemState>>({})
+  const activeTab = ref<Category | null>(null)
 
-  async function saveNow() {
-    try {
-      const payload = JSON.parse(JSON.stringify(store.value)) as AppStore
-      for (const tab of payload.tabs) {
-        for (const slot of tab.slots ?? []) {
-          if (!slot)
-            continue
-          const rec = slot as unknown as Record<string, unknown>
-          delete rec.iconURL
-          delete rec.running
-        }
-      }
-      await SaveData(payload)
+  function applyData(data: AppData) {
+    store.value = data.store as unknown as Store
+    state.value = data.state
+    for (const cat of store.value.categories) {
+      if (!cat.slots)
+        cat.slots = []
     }
-    catch (err) {
-      showError(err)
-    }
+    forceActiveTab()
   }
-
-  const save = debounce(saveNow as () => void, 300)
 
   async function refresh() {
     try {
-      const data = await GetData()
-      store.value = data as unknown as Store
-      for (const tab of store.value.tabs) {
-        if (!tab.slots)
-          tab.slots = []
-      }
-      forceActiveTab()
+      applyData(await GetData())
     }
     catch (err) {
       console.error(err)
     }
   }
 
-  const activeTab = ref<StoreTab | null>(null)
-
-  function forceActiveTab() {
-    let tab = store.value.tabs.find(t => t.guid === store.value.active_tab_guid) ?? null
-    if (!tab && store.value.tabs.length)
-      tab = store.value.tabs[0]!
-    activeTab.value = tab
-    if (tab && !store.value.active_tab_guid)
-      store.value.active_tab_guid = tab.guid
+  function saveNow() {
+    return SaveData(store.value as unknown as AppStore).catch(showError)
   }
 
-  async function setActiveTab(guid: string) {
-    store.value.active_tab_guid = guid
-    activeTab.value = store.value.tabs.find(t => t.guid === guid) ?? null
-    await save()
+  const save = debounce(saveNow, 300)
+
+  function forceActiveTab() {
+    const saved = loadActiveTab()
+    let tab = store.value.categories.find(c => c.guid === saved) ?? null
+    if (!tab && store.value.categories.length)
+      tab = store.value.categories[0]!
+    activeTab.value = tab
+    if (tab)
+      localStorage.setItem(ACTIVE_TAB_KEY, tab.guid)
   }
 
   function ensureActive() {
-    if (!activeTab.value && store.value.tabs.length) {
-      const t = store.value.tabs[0]!
+    if (!activeTab.value && store.value.categories.length) {
+      const t = store.value.categories[0]!
       activeTab.value = t
-      if (!store.value.active_tab_guid)
-        store.value.active_tab_guid = t.guid
+      localStorage.setItem(ACTIVE_TAB_KEY, t.guid)
     }
   }
 
+  function setActiveTab(guid: string) {
+    activeTab.value = store.value.categories.find(c => c.guid === guid) ?? null
+    if (activeTab.value)
+      localStorage.setItem(ACTIVE_TAB_KEY, guid)
+  }
+
   async function addTab(name = 'New Tab') {
-    const tab: StoreTab = { guid: randomUUID(), name, slots: [] }
-    store.value.tabs.push(tab)
-    await setActiveTab(tab.guid)
+    const cat: Category = { guid: randomUUID(), name, slots: [] }
+    store.value.categories.push(cat)
+    setActiveTab(cat.guid)
   }
 
   async function removeTab(guid: string) {
-    const idx = store.value.tabs.findIndex(t => t.guid === guid)
+    const idx = store.value.categories.findIndex(c => c.guid === guid)
     if (idx < 0)
       return
-    store.value.tabs.splice(idx, 1)
-    if (store.value.active_tab_guid === guid) {
-      const next = store.value.tabs[Math.min(idx, store.value.tabs.length - 1)] ?? null
-      store.value.active_tab_guid = next?.guid ?? ''
+    store.value.categories.splice(idx, 1)
+    if (activeTab.value?.guid === guid) {
+      const next = store.value.categories[Math.min(idx, store.value.categories.length - 1)] ?? null
       activeTab.value = next
+      localStorage.setItem(ACTIVE_TAB_KEY, next?.guid ?? '')
     }
     await save()
   }
 
   async function renameTab(guid: string, name: string) {
-    const tab = store.value.tabs.find(t => t.guid === guid)
-    if (!tab)
+    const cat = store.value.categories.find(c => c.guid === guid)
+    if (!cat)
       return
-    tab.name = name
+    cat.name = name
     await save()
   }
 
   async function moveTab(from: number, to: number) {
-    if (from < 0 || from >= store.value.tabs.length || to < 0 || to >= store.value.tabs.length)
+    if (from < 0 || from >= store.value.categories.length || to < 0 || to >= store.value.categories.length)
       return
     if (from === to)
       return
-    const [t] = store.value.tabs.splice(from, 1)
-    store.value.tabs.splice(to, 0, t!)
-    if (store.value.active_tab_guid === t!.guid)
+    const [t] = store.value.categories.splice(from, 1)
+    store.value.categories.splice(to, 0, t!)
+    if (activeTab.value?.guid === t!.guid)
       activeTab.value = t!
     await save()
   }
 
-  async function addItems(items: AppItem[]) {
+  async function addItems(items: AppItem[], icons: Record<string, string>) {
     if (!items.length)
       return
     ensureActive()
@@ -147,16 +140,19 @@ export function useStore() {
     if (!activeTab.value)
       return
     for (const item of items) {
-      activeTab.value.slots.push(item)
+      store.value.apps[item.guid] = item
+      if (icons[item.guid])
+        state.value[item.guid] = { ...state.value[item.guid], icon_url: icons[item.guid] }
+      activeTab.value.slots.push(item.guid)
     }
     await save()
   }
 
   async function addFilesInto() {
     try {
-      const items = await AddFiles()
-      if (items.length)
-        addItems(items)
+      const res = await AddFiles()
+      if (res.items.length)
+        await addItems(res.items, res.icons)
     }
     catch (err) {
       showError(err)
@@ -167,7 +163,7 @@ export function useStore() {
     ensureActive()
     if (!activeTab.value)
       return
-    const idx = activeTab.value.slots.findIndex(s => s?.guid === guid)
+    const idx = activeTab.value.slots.findIndex(s => s === guid)
     if (idx >= 0) {
       activeTab.value.slots[idx] = null
       await save()
@@ -175,27 +171,20 @@ export function useStore() {
   }
 
   async function renameItem(guid: string, name: string) {
-    for (const tab of store.value.tabs) {
-      const slot = tab.slots.find(s => s?.guid === guid)
-      if (slot) {
-        slot.name = name
-        await save()
-        return
-      }
-    }
+    const app = store.value.apps[guid]
+    if (!app)
+      return
+    app.name = name
+    await save()
   }
 
-  async function updateItemIcon(guid: string, icon: string) {
-    for (const tab of store.value.tabs) {
-      const slot = tab.slots.find(s => s?.guid === guid)
-      if (slot) {
-        slot.icon = icon
-        slot.iconURL = ''
-        await save()
-        await refresh()
-        return
-      }
-    }
+  async function updateItemIcon(guid: string, icon: string, iconUrl: string) {
+    const app = store.value.apps[guid]
+    if (!app)
+      return
+    app.icon = icon
+    state.value[guid] = { ...state.value[guid], icon_url: iconUrl }
+    await save()
   }
 
   async function setAutoMinimize(enabled: boolean) {
@@ -205,25 +194,28 @@ export function useStore() {
 
   function onDrop(_x: number, _y: number, paths: string[]) {
     AddPaths(paths)
-      .then((items) => {
-        if (items.length)
-          addItems(items)
+      .then((res) => {
+        if (res.items.length)
+          return addItems(res.items, res.icons)
       })
       .catch(showError)
   }
 
   onMounted(() => {
     refresh()
-    EventsOn('items:updated', refresh)
+    EventsOn('state:updated', (st: Record<string, ItemState>) => {
+      state.value = st
+    })
     OnFileDrop(onDrop, false)
   })
 
   onUnmounted(() => {
-    EventsOff('items:updated')
+    EventsOff('state:updated')
   })
 
   return {
     store,
+    state,
     activeTab,
     refresh,
     save,

@@ -7,6 +7,9 @@ import { formatRuntime, showError } from '../utils'
 
 const props = defineProps<{
   item: AppItem
+  iconUrl?: string
+  running?: boolean
+  runtimeMs?: number
   dragging?: boolean
   dragOver?: boolean
 }>()
@@ -15,18 +18,18 @@ const emit = defineEmits<{
   rename: []
   details: []
   delete: []
-  icondone: [icon: string]
+  icondone: [icon: string, iconUrl: string]
   dragstart: []
   dragover: []
   drop: []
   dragend: []
 }>()
 
-const runtimeText = computed(() => formatRuntime(props.item.runtime_ms ?? 0))
+const runtimeText = computed(() => formatRuntime(props.runtimeMs ?? 0))
 
 async function onRun() {
   try {
-    if (props.item.running)
+    if (props.running)
       await Stop(props.item.guid)
     else
       await Launch(props.item.guid)
@@ -37,7 +40,7 @@ async function onRun() {
 }
 
 function onDoubleClick() {
-  if (props.item.running)
+  if (props.running)
     return
   Launch(props.item.guid).catch(showError)
 }
@@ -61,15 +64,15 @@ async function run(action: () => Promise<void>) {
     }" @dblclick="onDoubleClick" @dragstart="emit('dragstart')" @dragover.prevent="emit('dragover')"
     @drop.prevent="emit('drop')" @dragend="emit('dragend')"
   >
-    <img :src="item.iconURL || item.icon || undefined" alt="" class="h-7 w-7 shrink-0 object-contain">
+    <img :src="iconUrl || item.icon || undefined" alt="" class="h-7 w-7 shrink-0 object-contain">
     <span class="min-w-0 flex-1 truncate" :title="item.name">{{ item.name }}</span>
     <span class="shrink-0 text-gray-500 dark:text-gray-400">{{ runtimeText }}</span>
     <button
       class="rounded border px-2.5 py-1 cursor-pointer"
-      :class="item.running ? 'border-red-600 bg-red-500 text-white hover:bg-red-600' : 'border-gray-400 bg-white hover:bg-gray-200 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 dark:hover:bg-gray-600'"
+      :class="running ? 'border-red-600 bg-red-500 text-white hover:bg-red-600' : 'border-gray-400 bg-white hover:bg-gray-200 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 dark:hover:bg-gray-600'"
       @click="onRun"
     >
-      {{ item.running ? 'Stop' : 'Run' }}
+      {{ running ? 'Stop' : 'Run' }}
     </button>
 
     <Menu as="div" class="relative">
@@ -103,7 +106,7 @@ async function run(action: () => Promise<void>) {
           <MenuItem v-slot="{ active }">
             <button
               class="block w-full px-3 py-1.5 text-left" :class="active ? 'bg-gray-100 dark:bg-gray-700' : ''"
-              @click="run(() => ChangeIcon(props.item.guid).then(icon => emit('icondone', icon)))"
+              @click="run(async () => { const res = await ChangeIcon(props.item.guid); emit('icondone', res.icon, res.icon_url) })"
             >
               Change icon
             </button>
@@ -111,7 +114,7 @@ async function run(action: () => Promise<void>) {
           <MenuItem v-slot="{ active }">
             <button
               class="block w-full px-3 py-1.5 text-left" :class="active ? 'bg-gray-100 dark:bg-gray-700' : ''"
-              @click="run(() => UpdateIcon(props.item.guid).then(icon => emit('icondone', icon)))"
+              @click="run(async () => { const res = await UpdateIcon(props.item.guid); emit('icondone', res.icon, res.icon_url) })"
             >
               Update icon
             </button>

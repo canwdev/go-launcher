@@ -1,10 +1,10 @@
 <script setup lang="ts">
-import type { StoreTab } from '../composables/useStore'
+import type { Category } from '../composables/useStore'
 import { Menu, MenuButton, MenuItem, MenuItems, TransitionRoot } from '@headlessui/vue'
 import { ref } from 'vue'
 
 defineProps<{
-  tabs: StoreTab[]
+  tabs: Category[]
   activeGuid: string
 }>()
 
