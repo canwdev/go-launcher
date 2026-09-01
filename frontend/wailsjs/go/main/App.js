@@ -30,6 +30,10 @@ export function Launch(arg1) {
   return window['go']['main']['App']['Launch'](arg1);
 }
 
+export function OpenDirectory(arg1) {
+  return window['go']['main']['App']['OpenDirectory'](arg1);
+}
+
 export function PickDirectory(arg1) {
   return window['go']['main']['App']['PickDirectory'](arg1);
 }

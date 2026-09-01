@@ -401,6 +401,20 @@ func (a *App) PickDirectory(initialDir string) (string, error) {
 	})
 }
 
+func (a *App) OpenDirectory(path string) error {
+	if path == "" {
+		path = absBase
+	}
+	info, err := os.Stat(path)
+	if err != nil {
+		return err
+	}
+	if !info.IsDir() {
+		return fmt.Errorf("%q is not a directory", path)
+	}
+	return openWithDefaultHandler(path)
+}
+
 func (a *App) ChangeIcon(guid string) (IconResult, error) {
 	a.mu.Lock()
 	item := a.findItem(guid)

@@ -66,6 +66,14 @@ function onSave() {
   <AppDialog :open="open" title="Edit item" @close="emit('close')">
     <form id="item-edit-form" class="flex flex-col gap-3" @submit.prevent="onSave">
       <label class="flex flex-col gap-1">
+        <span class="text-xs text-gray-500 dark:text-gray-400">ID</span>
+        <input
+          :value="props.item?.guid ?? ''" type="text" readonly
+          class="w-full rounded border border-gray-400 bg-gray-100 px-1.5 py-1 text-gray-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-400"
+        >
+      </label>
+
+      <label class="flex flex-col gap-1">
         <span class="text-xs text-gray-500 dark:text-gray-400">Name</span>
         <input
           v-model="name" type="text"

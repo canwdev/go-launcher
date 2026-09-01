@@ -108,6 +108,7 @@ export function useStore() {
       activeTab.value = next
       localStorage.setItem(ACTIVE_TAB_KEY, next?.guid ?? '')
     }
+    pruneOrphans()
     await save()
   }
 
@@ -161,15 +162,23 @@ export function useStore() {
     }
   }
 
-  async function removeItem(guid: string) {
-    ensureActive()
-    if (!activeTab.value)
-      return
-    const idx = activeTab.value.slots.findIndex(s => s === guid)
-    if (idx >= 0) {
-      activeTab.value.slots[idx] = null
-      await save()
+  function pruneOrphans() {
+    for (const cat of store.value.categories)
+      cat.slots = cat.slots.filter((s): s is string => s != null)
+    const referenced = new Set(store.value.categories.flatMap(c => c.slots))
+    for (const guid of Object.keys(store.value.apps)) {
+      if (!referenced.has(guid)) {
+        delete store.value.apps[guid]
+        delete state.value[guid]
+      }
     }
+  }
+
+  async function removeItem(guid: string) {
+    for (const cat of store.value.categories)
+      cat.slots = cat.slots.filter(s => s !== guid)
+    pruneOrphans()
+    await save()
   }
 
   async function renameItem(guid: string, name: string) {

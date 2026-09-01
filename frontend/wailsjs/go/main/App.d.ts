@@ -16,6 +16,8 @@ export function GetData():Promise<main.AppData>;
 
 export function Launch(arg1:string):Promise<void>;
 
+export function OpenDirectory(arg1:string):Promise<void>;
+
 export function PickDirectory(arg1:string):Promise<string>;
 
 export function PickFile(arg1:string):Promise<string>;

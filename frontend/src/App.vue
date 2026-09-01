@@ -2,6 +2,7 @@
 import type { AppItem } from './api'
 import { Menu, MenuButton, MenuItem, MenuItems, TransitionRoot } from '@headlessui/vue'
 import { computed, ref } from 'vue'
+import { OpenDirectory } from './api'
 import AppDialog from './components/AppDialog.vue'
 import ItemEditDialog from './components/ItemEditDialog.vue'
 import LauncherRow from './components/LauncherRow.vue'
@@ -149,6 +150,10 @@ async function onRefresh() {
   showToast('Data refreshed')
 }
 
+function onOpenProgramDir() {
+  OpenDirectory('').catch(showError)
+}
+
 function onAddFiles() {
   addFilesInto().catch(showError)
 }
@@ -207,6 +212,17 @@ function onAddFiles() {
                     ⟳
                   </span>
                   Refresh
+                </button>
+              </MenuItem>
+              <MenuItem v-slot="{ active }">
+                <button
+                  class="flex w-full items-center gap-2 px-3 py-1.5 text-left"
+                  :class="active ? 'bg-gray-100 dark:bg-gray-700' : ''" @click="onOpenProgramDir"
+                >
+                  <span class="inline-flex h-4 w-4 shrink-0 items-center justify-center text-gray-500 dark:text-gray-400">
+                    📂
+                  </span>
+                  Open program directory
                 </button>
               </MenuItem>
               <div class="my-1 border-t border-gray-200 dark:border-gray-700" />
