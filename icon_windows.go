@@ -9,6 +9,7 @@ import (
 	"syscall"
 	"unsafe"
 
+	"github.com/fcjr/geticon"
 	"golang.org/x/sys/windows"
 )
 
@@ -110,6 +111,14 @@ func readDIB(hbm windows.Handle, width, height int) ([]byte, error) {
 }
 
 func iconForFile(path string) (image.Image, error) {
+	img, err := geticon.FromPath(path)
+	if err == nil && img != nil {
+		return img, nil
+	}
+	return shellIconForFile(path)
+}
+
+func shellIconForFile(path string) (image.Image, error) {
 	p, err := windows.UTF16PtrFromString(path)
 	if err != nil {
 		return nil, err

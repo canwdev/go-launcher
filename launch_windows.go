@@ -4,7 +4,7 @@ package main
 
 import (
 	"errors"
-	"os/exec"
+	"path/filepath"
 	"strings"
 	"syscall"
 	"time"
@@ -85,7 +85,7 @@ func openWithDefaultHandler(path string) error {
 }
 
 func revealFile(path string) error {
-	return exec.Command("explorer", "/select,"+path).Start()
+	return openWithDefaultHandler(filepath.Dir(path))
 }
 
 func joinArgsForShell(args []string) string {
