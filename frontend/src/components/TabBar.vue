@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { Category } from '../composables/useStore'
 import { Menu, MenuButton, MenuItem, MenuItems, TransitionRoot } from '@headlessui/vue'
+import { Ellipsis, PencilLine, Plus, Trash2 } from '@lucide/vue'
 import { ref } from 'vue'
 
 defineProps<{
@@ -64,7 +65,7 @@ function onDragEnd() {
           class="flex h-4 w-4 items-center justify-center rounded text-xs opacity-0 hover:bg-white/20 group-hover:opacity-100"
           @click.stop
         >
-          ⋯
+          <Ellipsis class="h-3 w-3" />
         </MenuButton>
         <TransitionRoot
           enter="transition duration-100 ease-out" enter-from="opacity-0 scale-95"
@@ -76,18 +77,20 @@ function onDragEnd() {
           >
             <MenuItem v-slot="{ active }">
               <button
-                class="block w-full px-3 py-1.5 text-left text-sm text-gray-700 dark:text-gray-200"
+                class="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm text-gray-700 dark:text-gray-200"
                 :class="active ? 'bg-gray-100 dark:bg-gray-700' : ''" @click="emit('rename', tab.guid, tab.name)"
               >
-                Rename
+                <PencilLine class="h-4 w-4 shrink-0 text-gray-400 dark:text-gray-500" />
+                <span>Rename</span>
               </button>
             </MenuItem>
             <MenuItem v-slot="{ active }">
               <button
-                class="block w-full px-3 py-1.5 text-left text-sm text-red-600 dark:text-red-400"
+                class="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm text-red-600 dark:text-red-400"
                 :class="active ? 'bg-gray-100 dark:bg-gray-700' : ''" @click="emit('remove', tab.guid, tab.name)"
               >
-                Delete
+                <Trash2 class="h-4 w-4 shrink-0" />
+                <span>Delete</span>
               </button>
             </MenuItem>
           </MenuItems>
@@ -99,7 +102,7 @@ function onDragEnd() {
       class="flex h-6 w-6 shrink-0 cursor-pointer items-center justify-center rounded text-gray-500 hover:bg-gray-200 dark:text-gray-300 dark:hover:bg-gray-700"
       title="Add Tab" @click="emit('add')"
     >
-      ＋
+      <Plus class="h-4 w-4" />
     </button>
 
     <slot />

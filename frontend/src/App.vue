@@ -1,6 +1,8 @@
 <script setup lang="ts">
+import type { Component } from 'vue'
 import type { AppItem } from './api'
 import { Menu, MenuButton, MenuItem, MenuItems, TransitionRoot } from '@headlessui/vue'
+import { Check, Ellipsis, FolderOpen, FolderTree, Gamepad2, Images, Link, MapPin, Plus, RefreshCw } from '@lucide/vue'
 import { computed, ref } from 'vue'
 import { OpenDirectory } from './api'
 import AppDialog from './components/AppDialog.vue'
@@ -25,10 +27,11 @@ const themeOptions = [
   { value: 'dark', label: 'Dark' },
 ] as const
 
-const appMenuItems = [
+const appMenuItems: { key: string, toggle?: boolean, label: string, checked?: () => boolean, onClick: () => void, icon?: Component }[] = [
   {
     key: 'game-mode',
     toggle: true,
+    icon: Gamepad2,
     label: 'Game mode',
     checked: () => store.value.settings.game_mode,
     onClick: () => setGameMode(!store.value.settings.game_mode),
@@ -52,19 +55,19 @@ const appMenuItems = [
   },
   {
     key: 'refresh',
-    icon: '⟳',
+    icon: RefreshCw,
     label: 'Refresh',
     onClick: onRefresh,
   },
   {
     key: 'open-dir',
-    icon: '📂',
-    label: 'Open program directory',
+    icon: FolderOpen,
+    label: 'Open program directory...',
     onClick: onOpenProgramDir,
   },
   {
     key: 'batch-icons',
-    icon: '🖼',
+    icon: Images,
     label: 'Batch update icons',
     onClick: onBatchUpdateIcons,
   },
@@ -209,7 +212,7 @@ function onAddFiles() {
           class="flex h-6 w-6 shrink-0 cursor-pointer items-center justify-center rounded text-gray-500 hover:bg-gray-200 dark:text-gray-300 dark:hover:bg-gray-700"
           title="Add Files" @click="onAddFiles"
         >
-          ＋
+          <Plus class="h-4 w-4" />
         </button>
 
         <Menu as="div" class="relative">
@@ -217,7 +220,7 @@ function onAddFiles() {
             class="flex h-6 w-6 shrink-0 cursor-pointer items-center justify-center rounded text-gray-500 hover:bg-gray-200 dark:text-gray-300 dark:hover:bg-gray-700"
             title="Menu"
           >
-            ⋯
+            <Ellipsis class="h-4 w-4" />
           </MenuButton>
           <TransitionRoot
             enter="transition duration-100 ease-out" enter-from="opacity-0 scale-95"
@@ -232,20 +235,11 @@ function onAddFiles() {
                   class="flex w-full items-center gap-2 px-3 py-1.5 text-left"
                   :class="active ? 'bg-gray-100 dark:bg-gray-700' : ''" @click="item.onClick"
                 >
-                  <span
-                    v-if="item.icon"
-                    class="inline-flex h-4 w-4 shrink-0 items-center justify-center text-gray-500 dark:text-gray-400"
-                  >
-                    {{ item.icon }}
+                  <span class="inline-flex h-4 w-4 shrink-0 items-center justify-center text-gray-500 dark:text-gray-400">
+                    <component :is="item.icon" class="h-4 w-4" />
                   </span>
-                  <span
-                    v-else-if="item.toggle"
-                    class="inline-flex h-4 w-4 shrink-0 items-center justify-center rounded border text-xs"
-                    :class="item.checked() ? 'border-blue-500 bg-blue-500 text-white' : 'border-gray-400 bg-white dark:border-gray-500 dark:bg-gray-700'"
-                  >
-                    <span v-if="item.checked()">✓</span>
-                  </span>
-                  {{ item.label }}
+                  <span class="min-w-0 flex-1 truncate">{{ item.label }}</span>
+                  <Check v-if="item.toggle && item.checked?.()" class="h-4 w-4 shrink-0 text-blue-500" />
                 </button>
               </MenuItem>
               <div class="my-1 border-t border-gray-200 dark:border-gray-700" />

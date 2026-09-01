@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { AppItem } from '../api'
 import { Menu, MenuButton, MenuItem, MenuItems, TransitionRoot } from '@headlessui/vue'
+import { Ellipsis, Folder, ImageUp, Pencil, PencilLine, Trash2 } from '@lucide/vue'
 import { computed } from 'vue'
 import { ConvertItemToAbsolute, ConvertItemToRelative, Launch, Reveal, Stop, UpdateIcon } from '../api'
 import { formatRuntime, isAutoIcon, showError } from '../utils'
@@ -73,7 +74,7 @@ async function run(action: () => Promise<void>) {
       class="h-7 w-7 shrink-0 object-contain"
     >
     <span v-else class="h-7 w-7 shrink-0 object-contain" />
-    <span class="min-w-0 flex-1 truncate" :title="item.name">{{ item.name }}</span>
+    <span class="min-w-0 flex-1 truncate">{{ item.name }}</span>
     <span
       v-if="gameMode" class="shrink-0 rounded px-0.5 text-gray-500 dark:text-gray-400"
       :class="running ? 'cursor-not-allowed' : 'cursor-pointer hover:text-blue-600 hover:underline dark:hover:text-blue-400'"
@@ -92,7 +93,7 @@ async function run(action: () => Promise<void>) {
       <MenuButton
         class="cursor-pointer rounded border border-gray-400 bg-white px-2 py-1 hover:bg-gray-200 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 dark:hover:bg-gray-600"
       >
-        ⋯
+        <Ellipsis class="h-4 w-4" />
       </MenuButton>
       <TransitionRoot
         enter="transition duration-100 ease-out" enter-from="opacity-0 scale-95"
@@ -104,63 +105,68 @@ async function run(action: () => Promise<void>) {
         >
           <MenuItem v-slot="{ active }">
             <button
-              class="block w-full px-3 py-1.5 text-left" :class="active ? 'bg-gray-100 dark:bg-gray-700' : ''"
+              class="flex w-full items-center gap-2 px-3 py-1.5 text-left" :class="active ? 'bg-gray-100 dark:bg-gray-700' : ''"
               @click="emit('details')"
             >
-              Edit
+              <Pencil class="h-4 w-4 shrink-0 text-gray-400 dark:text-gray-500" />
+              <span>Edit</span>
             </button>
           </MenuItem>
           <MenuItem v-slot="{ active }">
             <button
-              class="block w-full px-3 py-1.5 text-left" :class="active ? 'bg-gray-100 dark:bg-gray-700' : ''"
+              class="flex w-full items-center gap-2 px-3 py-1.5 text-left" :class="active ? 'bg-gray-100 dark:bg-gray-700' : ''"
               @click="run(() => Reveal(props.item.guid))"
             >
-              Open containing folder...
+              <Folder class="h-4 w-4 shrink-0 text-gray-400 dark:text-gray-500" />
+              <span>Open folder...</span>
             </button>
           </MenuItem>
           <div class="my-1 border-t border-gray-200 dark:border-gray-700" />
 
           <MenuItem v-slot="{ active }">
             <button
-              class="block w-full px-3 py-1.5 text-left" :class="active ? 'bg-gray-100 dark:bg-gray-700' : ''"
+              class="flex w-full items-center gap-2 px-3 py-1.5 text-left" :class="active ? 'bg-gray-100 dark:bg-gray-700' : ''"
               @click="emit('rename')"
             >
-              Rename
+              <PencilLine class="h-4 w-4 shrink-0 text-gray-400 dark:text-gray-500" />
+              <span>Rename</span>
             </button>
           </MenuItem>
           <MenuItem v-slot="{ active }">
             <button
-              class="block w-full px-3 py-1.5 text-left text-red-600 dark:text-red-400"
+              class="flex w-full items-center gap-2 px-3 py-1.5 text-left text-red-600 dark:text-red-400"
               :class="active ? 'bg-gray-100 dark:bg-gray-700' : ''" @click="emit('delete')"
             >
-              Delete
+              <Trash2 class="h-4 w-4 shrink-0" />
+              <span>Delete</span>
             </button>
           </MenuItem>
           <div class="my-1 border-t border-gray-200 dark:border-gray-700" />
 
           <MenuItem v-if="isAutoIcon(props.item.icon)" v-slot="{ active }">
             <button
-              class="block w-full px-3 py-1.5 text-left" :class="active ? 'bg-gray-100 dark:bg-gray-700' : ''"
+              class="flex w-full items-center gap-2 px-3 py-1.5 text-left" :class="active ? 'bg-gray-100 dark:bg-gray-700' : ''"
               @click="run(async () => { const res = await UpdateIcon(props.item.guid); emit('icondone', res.icon, res.icon_url) })"
             >
-              Update icon
+              <ImageUp class="h-4 w-4 shrink-0 text-gray-400 dark:text-gray-500" />
+              <span>Update icon</span>
             </button>
           </MenuItem>
 
           <MenuItem v-slot="{ active }">
             <button
-              class="block w-full px-3 py-1.5 text-left" :class="active ? 'bg-gray-100 dark:bg-gray-700' : ''"
+              class="flex w-full items-center gap-2 px-3 py-1.5 text-left" :class="active ? 'bg-gray-100 dark:bg-gray-700' : ''"
               @click="run(async () => { await ConvertItemToAbsolute(props.item.guid); emit('refresh') })"
             >
-              Convert to absolute path
+              <span>Convert to absolute path</span>
             </button>
           </MenuItem>
           <MenuItem v-slot="{ active }">
             <button
-              class="block w-full px-3 py-1.5 text-left" :class="active ? 'bg-gray-100 dark:bg-gray-700' : ''"
+              class="flex w-full items-center gap-2 px-3 py-1.5 text-left" :class="active ? 'bg-gray-100 dark:bg-gray-700' : ''"
               @click="run(async () => { await ConvertItemToRelative(props.item.guid); emit('refresh') })"
             >
-              Convert to relative path
+              <span>Convert to relative path</span>
             </button>
           </MenuItem>
         </MenuItems>
