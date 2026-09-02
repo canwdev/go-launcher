@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { AppItem } from '../api'
 import { Menu, MenuButton, MenuItem, MenuItems } from '@headlessui/vue'
-import { Copy, Ellipsis, Folder, ImageUp, Pencil, PencilLine, Trash2 } from '@lucide/vue'
+import { Copy, Ellipsis, Folder, Pencil, PencilLine, Trash2 } from '@lucide/vue'
 import { computed } from 'vue'
 import { ConvertItemToAbsolute, ConvertItemToRelative, Launch, Reveal, Stop, UpdateIcon } from '../api'
 import { useMenuFlip } from '../composables/useMenuFlip'
@@ -167,7 +167,6 @@ async function run(action: () => Promise<void>) {
               class="flex w-full items-center gap-2 px-3 py-1.5 text-left" :class="active ? 'bg-gray-100 dark:bg-gray-700' : ''"
               @click="run(async () => { const res = await UpdateIcon(props.item.guid); emit('icondone', res.icon, res.icon_url) })"
             >
-              <ImageUp class="h-4 w-4 shrink-0 text-gray-400 dark:text-gray-500" />
               <span>Update icon</span>
             </button>
           </MenuItem>

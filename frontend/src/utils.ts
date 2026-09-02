@@ -52,5 +52,5 @@ export function isAutoIcon(icon: string | undefined): boolean {
   if (!icon)
     return true
   const norm = icon.replace(/\\/g, '/')
-  return norm.includes('/go-launcher-data/icons/')
+  return norm.includes('go-launcher-data/icons/')
 }

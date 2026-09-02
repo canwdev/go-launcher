@@ -98,7 +98,7 @@ watch(() => props.dragItemGuid, (v) => {
   <div
     class="flex items-center gap-1 border-b border-gray-300 bg-white px-2 py-1.5 dark:border-gray-700 dark:bg-gray-800"
   >
-    <TransitionGroup name="list" class="flex items-center gap-1">
+    <TransitionGroup name="list" tag="div" class="flex items-center gap-1">
       <div
         v-for="(tab, index) in tabs" :key="tab.guid" :draggable="true"
         class="group relative flex cursor-pointer items-center gap-1 rounded px-2.5 py-1 select-none" :class="[

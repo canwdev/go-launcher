@@ -13,6 +13,16 @@ import (
 var assets embed.FS
 
 func main() {
+	// Single-instance guard: refuse to start a second copy of the launcher.
+	// Must run before wails.Run initialises the UI/backend.
+	if ok, err := acquireSingleton(); err != nil {
+		log.Fatalf("single-instance check failed: %v", err)
+	} else if !ok {
+		activateExistingInstance()
+		return
+	}
+	defer releaseSingleton()
+
 	app := NewApp()
 
 	err := wails.Run(&options.App{
