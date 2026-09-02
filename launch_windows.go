@@ -101,16 +101,38 @@ func joinArgsForShell(args []string) string {
 	return strings.Join(parts, " ")
 }
 
-func startTracked(path string, args []string, workDir string, proc *runningProc) error {
+// startProcess launches path with args in workDir via ShellExecuteEx and
+// returns the process handle; the caller decides how to wait/cleanup.
+func startProcess(path string, args []string, workDir string) (windows.Handle, error) {
 	h, err := shellExecuteEx("open", path, joinArgsForShell(args), workDir)
 	if err != nil {
 		if errors.Is(err, syscall.Errno(1223)) || errors.Is(err, syscall.Errno(5)) {
-			return err
+			return 0, err
 		}
 		h, err = shellExecuteEx("runas", path, joinArgsForShell(args), workDir)
 		if err != nil {
-			return err
+			return 0, err
 		}
+	}
+	return h, nil
+}
+
+// startUntracked launches path without returning a process handle, so nothing
+// can Stop or time it. The shell-executed process keeps running after the
+// handle is released.
+func startUntracked(path string, args []string, workDir string) error {
+	h, err := startProcess(path, args, workDir)
+	if err != nil {
+		return err
+	}
+	_ = windows.CloseHandle(h)
+	return nil
+}
+
+func startTracked(path string, args []string, workDir string, proc *runningProc) error {
+	h, err := startProcess(path, args, workDir)
+	if err != nil {
+		return err
 	}
 	proc.start = time.Now()
 	proc.wait = func() error {

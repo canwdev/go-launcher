@@ -88,8 +88,8 @@ const menuEntries = computed(() => buildItemMenu({
 }, isAutoIcon(props.item.icon)))
 
 function onDoubleClick(e: MouseEvent) {
-  // Manual timer running: no launching at all (button and dbl-click both blocked).
-  if (props.timerActive || props.running)
+  // Process running: no relaunch via double-click.
+  if (props.running)
     return
   const target = e.target as HTMLElement | null
   // Only launch when double-clicking non-interactive areas (not buttons / runtime edit).
@@ -127,11 +127,8 @@ function onDoubleClick(e: MouseEvent) {
     ><component :is="runtimeIcon" class="h-3 w-3 shrink-0" />{{ runtimeText }}<template v-if="timerActive"> (<Plus class="h-3 w-3" />{{ timerMinutes }})</template></span>
     <button
       class="rounded px-2.5 py-1"
-      :class="timerActive && !running
-        ? 'cursor-not-allowed bg-gray-200 text-gray-400 dark:bg-gray-700 dark:text-gray-500'
-        : (running ? 'bg-red-500 text-white hover:bg-red-600' : 'text-gray-700 hover:bg-gray-200 dark:text-gray-100 dark:hover:bg-gray-700')"
-      :disabled="timerActive && !running"
-      :title="timerActive && !running ? 'Timer running - stop the timer to run' : undefined"
+      :class="running ? 'bg-red-500 text-white hover:bg-red-600' : 'text-gray-700 hover:bg-gray-200 dark:text-gray-100 dark:hover:bg-gray-700'"
+      :title="running ? 'Click to stop' : undefined"
       @click="onRun"
     >
       {{ running ? 'Stop' : 'Run' }}

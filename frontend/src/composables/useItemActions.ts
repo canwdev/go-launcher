@@ -56,9 +56,7 @@ export function useItemActions(
         await Stop(v.item.guid)
       }
       else {
-        // 计时中禁止启动新运行
-        if (v.timerActive)
-          return
+        // 手动计时进行中也可再次启动（不再禁用）；autoTimer 启动会自动触发计时
         if (v.autoTimer)
           await Open(v.item.guid)
         else

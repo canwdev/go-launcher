@@ -219,7 +219,14 @@ func (a *App) findItem(guid string) *AppItem {
 	return a.store.Apps[guid]
 }
 
-func openFile(path string) error {
+func openFile(path string, args []string, workDir string) error {
+	// Executables are launched through the real process-run mechanism
+	// (startUntracked) with the frontend-supplied args and working directory,
+	// but without full tracking: no process handle is kept for Stop and no
+	// runtime is accumulated.
+	if isExecutable(path) {
+		return startUntracked(path, args, workDir)
+	}
 	return openWithDefaultHandler(path)
 }
 
@@ -658,7 +665,7 @@ func (a *App) launch(guid string) error {
 
 	// Game mode off: plain open only - no tracking, no timing, no window control.
 	if !gameMode {
-		return openFile(path)
+		return openFile(path, args, workingDir)
 	}
 
 	if isExecutable(path) {
@@ -690,7 +697,7 @@ func (a *App) launch(guid string) error {
 		}()
 		return nil
 	}
-	return openFile(path)
+	return openFile(path, args, workingDir)
 }
 
 func (a *App) Launch(guid string) error {
@@ -708,8 +715,13 @@ func (a *App) Open(guid string) error {
 		return fmt.Errorf("invalid item guid %q", guid)
 	}
 	path := absPath(item.Path)
+	args := splitArgs(item.Args)
+	workDir := ""
+	if item.WorkingDir != "" {
+		workDir = absPath(item.WorkingDir)
+	}
 	a.mu.Unlock()
-	return openFile(path)
+	return openFile(path, args, workDir)
 }
 
 func (a *App) Stop(guid string) error {
