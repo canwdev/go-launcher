@@ -1,5 +1,5 @@
-import { onMounted, onUnmounted, ref, watch } from 'vue'
 import { useStorage } from '@vueuse/core'
+import { onMounted, onUnmounted, ref, watch } from 'vue'
 
 export type Theme = 'auto' | 'light' | 'dark'
 

@@ -12,6 +12,8 @@ export default antfu(
   {
     rules: {
       'no-alert': 'off',
+      // 项目统一使用 kebab-case 自定义事件名（如 @stop-timer / @grid-dragstart）
+      'vue/custom-event-name-casing': ['error', 'kebab-case'],
     },
   },
 )

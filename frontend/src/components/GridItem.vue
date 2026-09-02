@@ -8,8 +8,6 @@ import { useItemActions } from '../composables/useItemActions'
 import { isAutoIcon, showError } from '../utils'
 import ItemMenu from './ItemMenu.vue'
 
-const GRID_SLOT_MIME = 'application/x-gol-grid-slot'
-
 const props = defineProps<{
   item: AppItem | null
   slotIndex: number
@@ -42,6 +40,8 @@ const emit = defineEmits<{
   'grid-drop': [index: number, ctrl: boolean]
   'grid-dragend': []
 }>()
+
+const GRID_SLOT_MIME = 'application/x-gol-grid-slot'
 
 const isSlot = computed(() => props.item == null)
 

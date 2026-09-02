@@ -13,12 +13,12 @@ const props = defineProps<{
 }>()
 
 const emit = defineEmits<{
-  add: []
-  select: [guid: string]
-  rename: [guid: string, name: string]
-  remove: [guid: string, name: string]
-  reorder: [from: number, to: number]
-  itemDrop: [guid: string, tabGuid: string, copy: boolean]
+  'add': []
+  'select': [guid: string]
+  'rename': [guid: string, name: string]
+  'remove': [guid: string, name: string]
+  'reorder': [from: number, to: number]
+  'item-drop': [guid: string, tabGuid: string, copy: boolean]
 }>()
 
 // Drag: highlight the source (opacity) and the insertion target (ring) while
@@ -62,7 +62,7 @@ function onDrop(e: DragEvent, index: number) {
     const guid = e.dataTransfer?.getData('application/x-go-launcher-item') || props.dragItemGuid
     const tab = props.tabs[index]
     if (tab && guid)
-      emit('itemDrop', guid, tab.guid, e.ctrlKey || e.metaKey)
+      emit('item-drop', guid, tab.guid, e.ctrlKey || e.metaKey)
     resetItemOver()
     return
   }

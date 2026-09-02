@@ -1,5 +1,6 @@
-import { computed } from 'vue'
 import { Clock, Timer } from '@lucide/vue'
+import { useTimeoutFn } from '@vueuse/core'
+import { computed, ref } from 'vue'
 import { Launch, Open, Stop } from '../api'
 import { formatRuntime, showError } from '../utils'
 
@@ -26,16 +27,28 @@ export interface ItemLaunchCallbacks {
  * - onClick：runtime 点击——计时中→停止；运行中→忽略；否则→编辑 runtime
  * - runtimeText / runtimeIcon：展示串与图标（autoTimer 用 Timer，否则 Clock）
  */
+const LAUNCH_COOLDOWN_MS = 1000
+
 export function useItemActions(
   get: () => ItemLaunchState,
   callbacks: ItemLaunchCallbacks,
 ) {
   const o = computed(get)
 
+  // 启动 1s 冷却：防止双击 / 重复点击导致重复启动
+  const launchCooling = ref(false)
+  const { start: startLaunchCooldown } = useTimeoutFn(() => {
+    launchCooling.value = false
+  }, LAUNCH_COOLDOWN_MS, { immediate: false })
+
   const runtimeText = computed(() => formatRuntime(o.value.runtimeMs))
   const runtimeIcon = computed(() => (o.value.autoTimer ? Timer : Clock))
 
   async function onRun() {
+    if (launchCooling.value)
+      return
+    launchCooling.value = true
+    startLaunchCooldown()
     const v = o.value
     try {
       if (v.running) {

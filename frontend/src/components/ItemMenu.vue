@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { Menu, MenuButton, MenuItem, MenuItems } from '@headlessui/vue'
 import type { MenuEntry } from '../composables/itemMenu'
+import { Menu, MenuButton, MenuItem, MenuItems } from '@headlessui/vue'
 import { useMenuFlip } from '../composables/useMenuFlip'
 
 const props = withDefaults(defineProps<{
@@ -31,7 +31,7 @@ const { onMenuButtonClick, menuPosition } = useMenuFlip({ estimate: props.estima
     </MenuButton>
     <Teleport to="body">
       <MenuItems
-        :class="[widthClass, 'overflow-y-auto rounded border border-gray-300 bg-white py-1 shadow-md focus:outline-none dark:border-gray-700 dark:bg-gray-800']"
+        class="overflow-y-auto rounded border border-gray-300 bg-white py-1 shadow-md focus:outline-none dark:border-gray-700 dark:bg-gray-800" :class="[widthClass]"
         :style="menuPosition(align)"
       >
         <template v-for="entry in entries" :key="entry.key">
