@@ -1,7 +1,7 @@
 *.exe
 *.exe~
 /go-launcher-data
-/build
+/build/bin
 node_modules
 /frontend/dist
 *.json.md5
