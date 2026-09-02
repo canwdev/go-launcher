@@ -109,9 +109,9 @@ $img.Dispose(); Remove-Item $tmp -Force
 - 更换 exe 图标后，若桌面/任务栏仍显示旧图标，刷新 Windows 图标缓存：
 
   ```powershell
-  Stop-Process -Name explorer -Force
   Remove-Item "$env:LOCALAPPDATA\IconCache.db" -Force -ErrorAction SilentlyContinue
   Remove-Item "$env:LOCALAPPDATA\Microsoft\Windows\Explorer\iconcache_*.db" -Force -ErrorAction SilentlyContinue
+  Stop-Process -Name explorer -Force
   Start-Process explorer
   ```
 

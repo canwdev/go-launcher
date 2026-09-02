@@ -542,7 +542,7 @@ function onAddFiles() {
           class="rounded border border-red-600 bg-red-500 px-2.5 py-1 text-white hover:bg-red-600"
           @click="onConfirm"
         >
-          Delete
+          OK
         </button>
       </template>
     </AppDialog>

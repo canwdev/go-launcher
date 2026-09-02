@@ -1,6 +1,11 @@
 # go-launcher
 
-![](docs/2026-08-31_165034.png)
+<p align="center">
+  <img src="build/appicon.png" alt="icon" width="180" height="180" />
+  <br>
+  <img src="docs/screenshot.webp" alt="go launcher"  />
+</p>
+
 
 A minimal [Wails](https://wails.io/) desktop launcher app for Go. It opens a
 window listing files/programs (with icons and accumulated runtime), letting you
@@ -45,5 +50,6 @@ The binary is produced at `build/bin/go-launcher.exe` and copied to `go-launcher
 
 ## References
 
+- [Icon generation](./docs/ICON.md)
 - [Wails documentation](https://wails.io/docs/introduction)
 - [Wails on GitHub](https://github.com/wailsapp/wails)
