@@ -42,6 +42,7 @@ const emit = defineEmits<{
 }>()
 
 const GRID_SLOT_MIME = 'application/x-gol-grid-slot'
+const ITEM_DRAG_MIME = 'application/x-go-launcher-item'
 
 const isSlot = computed(() => props.item == null)
 
@@ -102,6 +103,9 @@ function onDragStart(e: DragEvent) {
     return
   emit('grid-dragstart', props.slotIndex, isSlot.value)
   e.dataTransfer?.setData(GRID_SLOT_MIME, String(props.slotIndex))
+  // 同时写入 item MIME，支持拖拽到标签栏移动/复制
+  if (!isSlot.value && props.item)
+    e.dataTransfer?.setData(ITEM_DRAG_MIME, props.item.guid)
   if (e.dataTransfer)
     e.dataTransfer.effectAllowed = 'copyMove'
 }

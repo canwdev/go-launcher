@@ -40,10 +40,17 @@ const gridDrag = ref<{ from: number, isSlot: boolean } | null>(null)
 const gridOver = ref<number | null>(null)
 const gridCopy = ref(false)
 
+// GUID of the item currently being dragged (null when dragging a tab or nothing).
+const dragItemGuid = ref<string | null>(null)
+const ITEM_DRAG_MIME = 'application/x-go-launcher-item'
+
 function onGridDragStart(index: number, isSlot: boolean) {
   gridDrag.value = { from: index, isSlot }
   gridOver.value = null
   gridCopy.value = false
+  // 同步到标签栏拖拽：记录被拖 item 的 guid（空槽无 guid）
+  const slot = activeTab.value?.slots[index]
+  dragItemGuid.value = (!isSlot && slot) ? slot : null
 }
 function onGridDragOver(index: number) {
   if (gridDrag.value)
@@ -63,11 +70,13 @@ function onGridDrop(index: number, ctrl: boolean) {
   gridDrag.value = null
   gridOver.value = null
   gridCopy.value = false
+  dragItemGuid.value = null
 }
 function onGridDragEnd() {
   gridDrag.value = null
   gridOver.value = null
   gridCopy.value = false
+  dragItemGuid.value = null
 }
 
 // grid 渲染辅助：slot 转 item
@@ -168,9 +177,6 @@ const { onMenuButtonClick, menuPosition } = useMenuFlip({ estimate: 260 })
 const draggingIndex = ref<number | null>(null)
 const dragFromIndex = ref<number | null>(null)
 const dragOverIndex = ref<number | null>(null)
-// GUID of the item currently being dragged (null when dragging a tab or nothing).
-const dragItemGuid = ref<string | null>(null)
-const ITEM_DRAG_MIME = 'application/x-go-launcher-item'
 
 const rows = computed<{ item: AppItem, index: number }[]>(() => {
   const tab = activeTab.value
@@ -325,6 +331,10 @@ function resetDrag() {
 // Drop an item onto a tab: copy (Ctrl held) or move.
 function onItemDropOnTab(guid: string, tabGuid: string, copy: boolean) {
   resetDrag()
+  // 若从网格视图拖来，同样清空网格拖拽状态
+  gridDrag.value = null
+  gridOver.value = null
+  gridCopy.value = false
   if (copy)
     copyItemToTab(guid, tabGuid).catch(showError)
   else
