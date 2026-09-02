@@ -162,9 +162,8 @@ export function useStore() {
   }
 
   function pruneOrphans() {
-    for (const cat of store.value.categories)
-      cat.slots = cat.slots.filter((s): s is string => s != null)
-    const referenced = new Set(store.value.categories.flatMap(c => c.slots))
+    // 保留空槽：仅按非 null 的 guid 计算引用，不重写 slots（空槽 null 需持久化）
+    const referenced = new Set(store.value.categories.flatMap(c => c.slots.filter((s): s is string => s != null)))
     for (const guid of Object.keys(store.value.apps)) {
       if (!referenced.has(guid)) {
         delete store.value.apps[guid]
@@ -217,6 +216,61 @@ export function useStore() {
     for (const cat of store.value.categories)
       cat.slots = cat.slots.filter(s => s !== guid)
     target.slots.push(guid)
+    await save()
+  }
+
+  // === Grid 视图专用：空槽与重排操作 ===
+
+  /** 在 activeTab 的指定槽位之前插入一个空槽（null）。item 菜单调用=插到 item 前面 */
+  async function insertEmptyAt(index: number) {
+    const tab = activeTab.value
+    if (!tab)
+      return
+    tab.slots.splice(Math.max(0, Math.min(index, tab.slots.length)), 0, null)
+    await save()
+  }
+
+  /** 删除 activeTab 指定索引处的空槽（仅限 null 槽位） */
+  async function deleteSlotAt(index: number) {
+    const tab = activeTab.value
+    if (!tab || index < 0 || index >= tab.slots.length || tab.slots[index] !== null)
+      return
+    tab.slots.splice(index, 1)
+    await save()
+  }
+
+  /**
+   * Grid 拖拽重排：把源槽（item 或空槽）移动到目标位置；copy=true 时复制 item 到目标位。
+   * 与列表视图本地 splice 不同，这里统一走 store + 持久化。
+   */
+  async function reorderSlots(from: number, to: number, copy = false) {
+    const tab = activeTab.value
+    if (!tab)
+      return
+    if (from < 0 || from >= tab.slots.length || to < 0 || to >= tab.slots.length || from === to)
+      return
+    const src = tab.slots[from]
+    if (copy) {
+      if (src == null)
+        return // 空槽不能复制
+      const app = store.value.apps[src]
+      if (!app)
+        return
+      const copyItem: AppItem = {
+        ...app,
+        guid: randomUUID(),
+        name: `${app.name} (copy)`,
+        runtime_ms: 0,
+      }
+      store.value.apps[copyItem.guid] = copyItem
+      if (state.value[src]?.icon_url)
+        state.value[copyItem.guid] = { ...state.value[copyItem.guid], icon_url: state.value[src].icon_url }
+      tab.slots.splice(to, 0, copyItem.guid)
+    }
+    else {
+      const [moved] = tab.slots.splice(from, 1)
+      tab.slots.splice(to, 0, moved ?? null)
+    }
     await save()
   }
 
@@ -352,6 +406,9 @@ export function useStore() {
     duplicateItem,
     moveItemToTab,
     copyItemToTab,
+    insertEmptyAt,
+    deleteSlotAt,
+    reorderSlots,
     updateItemIcon,
     updateItem,
     batchUpdateIcons,

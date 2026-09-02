@@ -3,10 +3,12 @@ import type { Component } from 'vue'
 import type { AppItem } from './api'
 import type { Theme } from './composables/useTheme'
 import { Menu, MenuButton, MenuItem, MenuItems } from '@headlessui/vue'
-import { Check, Ellipsis, FolderOpen, Gamepad2, Images, Moon, Plus, RefreshCw, Sun, SunMoon } from '@lucide/vue'
+import { Check, Ellipsis, FolderOpen, Gamepad2, Images, LayoutGrid, List, Moon, Plus, RefreshCw, Sun, SunMoon } from '@lucide/vue'
 import { computed, ref } from 'vue'
+import { useStorage } from '@vueuse/core'
 import { OpenDirectory } from './api'
 import AppDialog from './components/AppDialog.vue'
+import GridItem from './components/GridItem.vue'
 import ItemEditDialog from './components/ItemEditDialog.vue'
 import LauncherRow from './components/LauncherRow.vue'
 import RuntimeEditDialog from './components/RuntimeEditDialog.vue'
@@ -21,11 +23,71 @@ import { useTheme } from './composables/useTheme'
 import { useToast } from './composables/useToast'
 import { formatRuntime, showError } from './utils'
 
-const { activeTab, state, store, addFilesInto, addTab, renameItem, removeItem, setActiveTab, moveTab, renameTab, removeTab, updateItemIcon, updateItem, batchUpdateIcons, save, refresh, setGameMode, setRuntimeMs, setAbsolutePaths, convertToAbsolute, convertToRelative, duplicateItem, moveItemToTab, copyItemToTab } = useStore()
+const { activeTab, state, store, addFilesInto, addTab, renameItem, removeItem, setActiveTab, moveTab, renameTab, removeTab, updateItemIcon, updateItem, batchUpdateIcons, save, refresh, setGameMode, setRuntimeMs, setAbsolutePaths, convertToAbsolute, convertToRelative, duplicateItem, moveItemToTab, copyItemToTab, insertEmptyAt, deleteSlotAt, reorderSlots } = useStore()
 const { theme, setTheme } = useTheme()
 const { toasts, showToast } = useToast()
 const autoRuntime = useAutoRuntime()
 const timer = useManualTimer()
+
+// 视图模式：list（列表） / grid（网格）。UI 偏好，走 localStorage。
+const viewMode = useStorage<'list' | 'grid'>('launcher-view-mode', 'list')
+function toggleViewMode() {
+  viewMode.value = viewMode.value === 'grid' ? 'list' : 'grid'
+}
+
+// === Grid 视图拖拽状态 ===
+const gridDrag = ref<{ from: number, isSlot: boolean } | null>(null)
+const gridOver = ref<number | null>(null)
+const gridCopy = ref(false)
+
+function onGridDragStart(index: number, isSlot: boolean) {
+  gridDrag.value = { from: index, isSlot }
+  gridOver.value = null
+  gridCopy.value = false
+}
+function onGridDragOver(index: number) {
+  if (gridDrag.value)
+    gridOver.value = index
+}
+function onGridDrop(index: number, ctrl: boolean) {
+  const d = gridDrag.value
+  if (d && gridOver.value !== null && d.from !== index) {
+    if (ctrl && !d.isSlot) {
+      gridCopy.value = true
+      reorderSlots(d.from, index, true).catch(showError)
+    }
+    else {
+      reorderSlots(d.from, index, false).catch(showError)
+    }
+  }
+  gridDrag.value = null
+  gridOver.value = null
+  gridCopy.value = false
+}
+function onGridDragEnd() {
+  gridDrag.value = null
+  gridOver.value = null
+  gridCopy.value = false
+}
+
+// grid 渲染辅助：slot 转 item
+function gridItem(slot: string | null): AppItem | null {
+  return slot ? store.value.apps[slot] ?? null : null
+}
+function gridKey(slot: string | null, i: number): string {
+  return slot ? `g-${slot}` : `s-${i}`
+}
+function onInsertEmptyAt(index: number) {
+  insertEmptyAt(index).catch(showError)
+}
+function onInsertEmptyByGuid(guid: string) {
+  const tab = activeTab.value
+  if (!tab)
+    return
+  const idx = tab.slots.indexOf(guid)
+  if (idx >= 0)
+    insertEmptyAt(idx).catch(showError)
+}
 // 指定 item 手动计时的显示文案（多计时并行，按 guid 计算；elapsedMs 每 30s 刷新）。
 // 内容展示复用 formatRuntime，保证与运行时长的格式化口径一致。
 function timerMinutes(guid: string) {
@@ -310,6 +372,15 @@ function onAddFiles() {
           <component :is="themeIcon" class="h-4 w-4" />
         </button>
 
+        <!-- 视图切换：网格 ⇄ 列表（放在全局菜单左侧） -->
+        <button
+          class="flex h-6 w-6 shrink-0 items-center justify-center rounded text-gray-500 hover:bg-gray-200 dark:text-gray-300 dark:hover:bg-gray-700"
+          :title="viewMode === 'grid' ? 'Switch to list view' : 'Switch to grid view'"
+          @click="toggleViewMode"
+        >
+          <component :is="viewMode === 'grid' ? List : LayoutGrid" class="h-4 w-4" />
+        </button>
+
         <Menu as="div" class="relative">
           <MenuButton
             class="flex h-6 w-6 shrink-0 items-center justify-center rounded text-gray-500 hover:bg-gray-200 dark:text-gray-300 dark:hover:bg-gray-700"
@@ -346,10 +417,15 @@ function onAddFiles() {
     <main class="flex-1 overflow-y-auto p-2">
       <Transition name="fade" mode="out-in">
         <div :key="activeTab?.guid ?? 'empty'" class="min-h-full">
-          <div v-if="rows.length === 0" class="p-5 text-center text-gray-500 dark:text-gray-400">
+          <div v-if="viewMode === 'list' && rows.length === 0" class="p-5 text-center text-gray-500 dark:text-gray-400">
             No files added yet. Click "Add Files" or drop files anywhere.{{ activeTab ? ` (tab: ${activeTab.name})` : '' }}
           </div>
-          <TransitionGroup name="list">
+          <div v-else-if="viewMode === 'grid' && (!activeTab || activeTab.slots.length === 0)" class="p-5 text-center text-gray-500 dark:text-gray-400">
+            No files added yet. Click "Add Files" or drop files anywhere.{{ activeTab ? ` (tab: ${activeTab.name})` : '' }}
+          </div>
+
+          <!-- 列表视图 -->
+          <TransitionGroup v-if="viewMode === 'list'" name="list">
             <LauncherRow
               v-for="(row, index) in rows" :key="row.item.guid" :item="row.item"
               :icon-url="state[row.item.guid]?.icon_url ?? ''" :running="state[row.item.guid]?.running ?? false"
@@ -362,9 +438,43 @@ function onAddFiles() {
               @refresh="refresh" @icondone="(icon, iconUrl) => onIconDone(icon, iconUrl, row.item)"
               @edit-runtime="onEditRuntime(row.item.guid)" @stop-timer="onStopTimer(row.item.guid)"
               @launched="onLaunched(row.item.guid)"
+              @insert-empty="onInsertEmptyByGuid(row.item.guid)"
               @dragstart="(e: DragEvent) => onDragStart(e, index)" @dragover="onDragOver(index)" @drop="onDrop" @dragend="onDragEnd"
             />
           </TransitionGroup>
+
+          <!-- 网格视图（含空槽；随窗口宽度自动变列数） -->
+          <div v-else class="grid gap-2 pb-1" style="grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));">
+            <GridItem
+              v-for="(slot, i) in activeTab?.slots ?? []" :key="gridKey(slot, i)"
+              :item="gridItem(slot)" :slot-index="i"
+              :icon-url="slot ? state[slot]?.icon_url ?? '' : ''"
+              :running="slot ? state[slot]?.running ?? false : false"
+              :runtime-ms="slot ? rowRuntimeMs(slot) : 0"
+              :game-mode="store.settings.game_mode"
+              :timer-active="slot ? timer.isActive(slot) : false"
+              :timer-minutes="slot ? timerMinutes(slot) : '--'"
+              :auto-timer="slot ? timer.isAutoTimer(slot) : false"
+              :dragging="gridDrag?.from === i"
+              :drag-over="gridOver === i && gridDrag !== null && gridOver !== gridDrag.from"
+              :drag-copy="gridCopy"
+              @rename="slot && openItemRename(gridItem(slot)!)"
+              @details="slot && openItemEdit(gridItem(slot)!)"
+              @duplicate="slot && duplicateItem(slot)"
+              @insert-empty="onInsertEmptyAt(i)"
+              @delete-empty="slot === null && deleteSlotAt(i)"
+              @delete="slot && onDeleteRequested(gridItem(slot)!)"
+              @refresh="refresh"
+              @icondone="(icon, iconUrl) => slot && onIconDone(icon, iconUrl, gridItem(slot)!)"
+              @edit-runtime="slot && onEditRuntime(slot)"
+              @stop-timer="slot && onStopTimer(slot)"
+              @launched="slot && onLaunched(slot)"
+              @grid-dragstart="onGridDragStart"
+              @grid-dragover="onGridDragOver"
+              @grid-drop="onGridDrop"
+              @grid-dragend="onGridDragEnd"
+            />
+          </div>
         </div>
       </Transition>
     </main>

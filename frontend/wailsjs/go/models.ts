@@ -91,7 +91,7 @@ export namespace main {
 	export class CategoryNode {
 	    guid: string;
 	    name: string;
-	    slots: string[];
+	    slots: (string | null)[];
 	
 	    static createFrom(source: any = {}) {
 	        return new CategoryNode(source);

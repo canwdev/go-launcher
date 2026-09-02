@@ -65,10 +65,16 @@ export function useMenuFlip(options: UseMenuFlipOptions = {}) {
       pos.top = `${Math.round(a.y + a.h + gap)}px`
       pos.maxHeight = `min(calc(100vh - ${Math.round(a.y + a.h + gap)}px), 95vh)`
     }
-    if (align === 'right')
-      pos.right = `${Math.max(0, Math.round(window.innerWidth - (a.x + a.w)))}px`
-    else
+    if (align === 'right') {
+      let right = Math.max(0, Math.round(window.innerWidth - (a.x + a.w)))
+      // 水平 clamp：菜单约 220px 宽，其左缘不得超出视口左侧（窄视口/贴右边缘时安全）
+      const menuW = 220
+      right = Math.min(right, Math.max(0, window.innerWidth - menuW - 4))
+      pos.right = `${right}px`
+    }
+    else {
       pos.left = `${Math.round(a.x)}px`
+    }
     return pos
   }
 
