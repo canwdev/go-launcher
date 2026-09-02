@@ -204,7 +204,7 @@ function onSubmitModal(name: string) {
 
 const { open: modalOpen, title: modalTitle, name: modalName, openRename: openModalRename, ok: onModalOk, close: closeModal } = useModalDialog(onSubmitModal)
 
-const { open: confirmOpen, message: confirmMessage, request: requestConfirm, confirm: onConfirm, close: closeConfirm } = useConfirmDialog()
+const { open: confirmOpen, message: confirmMessage, request: requestConfirm, requestAsync, confirm: onConfirm, close: closeConfirm } = useConfirmDialog()
 
 const editOpen = ref(false)
 const editingItem = ref<AppItem | null>(null)
@@ -280,6 +280,11 @@ function onDeleteRequested(item: AppItem) {
 
 function onDeleteTabRequested(guid: string, name: string) {
   requestConfirm(`Delete tab "${name}"?`, () => removeTab(guid).catch(showError))
+}
+
+// grid 视图：停止运行中的程序前需用户确认（英文文案）
+function onConfirmStop(resolve: (ok: boolean) => void) {
+  requestAsync('Stop this app?').then(resolve)
 }
 
 function onIconDone(icon: string, iconUrl: string, item: AppItem) {
@@ -483,6 +488,7 @@ function onAddFiles() {
               @grid-dragover="onGridDragOver"
               @grid-drop="onGridDrop"
               @grid-dragend="onGridDragEnd"
+              @confirm-stop="onConfirmStop"
             />
           </div>
         </div>

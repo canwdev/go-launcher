@@ -39,6 +39,7 @@ const emit = defineEmits<{
   'grid-dragover': [index: number]
   'grid-drop': [index: number, ctrl: boolean]
   'grid-dragend': []
+  'confirm-stop': [resolve: (ok: boolean) => void]
 }>()
 
 const GRID_SLOT_MIME = 'application/x-gol-grid-slot'
@@ -69,6 +70,8 @@ const { runtimeText, runtimeIcon, onRun, onClick } = useItemActions(
     onLaunched: () => emit('launched'),
     onStopTimer: () => emit('stop-timer'),
     onEditRuntime: () => emit('edit-runtime'),
+    // grid 视图：运行中再次点击需弹窗确认后再停止
+    confirmStop: () => new Promise<boolean>(resolve => emit('confirm-stop', resolve)),
   },
 )
 
@@ -133,6 +136,7 @@ function onDragEnd() {
     :class="{
       'opacity-40': dragging,
       'ring-2 ring-blue-400': dragOver,
+      'border-red-500 hover:border-red-500 dark:border-red-500 dark:hover:border-red-500': running,
     }"
     @click="onRun"
     @dragstart="onDragStart"

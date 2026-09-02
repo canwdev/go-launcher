@@ -19,6 +19,8 @@ export interface ItemLaunchCallbacks {
   onLaunched: () => void
   onStopTimer: () => void
   onEditRuntime: () => void
+  /** 可选：停止前确认（grid 视图点击运行中程序需弹窗确认）。返回 false 则取消停止。 */
+  confirmStop?: () => Promise<boolean>
 }
 
 /**
@@ -53,6 +55,9 @@ export function useItemActions(
     try {
       if (v.running) {
         // 计时中允许 Stop（否则 autoTimer 启动后程序将无法停止）
+        // grid 视图可要求停止前确认：confirmStop 返回 false 则取消
+        if (callbacks.confirmStop && !(await callbacks.confirmStop()))
+          return
         await Stop(v.item.guid)
       }
       else {
