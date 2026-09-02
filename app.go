@@ -697,6 +697,21 @@ func (a *App) Launch(guid string) error {
 	return a.launch(guid)
 }
 
+// Open launches an item without any process tracking (no runtime tracking, no
+// Stop handle, no auto-minimize). Used for items that opt into manual-only
+// timing (autoTimer), e.g. programs the launcher cannot track as a process.
+func (a *App) Open(guid string) error {
+	a.mu.Lock()
+	item := a.findItem(guid)
+	if item == nil {
+		a.mu.Unlock()
+		return fmt.Errorf("invalid item guid %q", guid)
+	}
+	path := absPath(item.Path)
+	a.mu.Unlock()
+	return openFile(path)
+}
+
 func (a *App) Stop(guid string) error {
 	a.mu.Lock()
 	p, ok := a.running[guid]

@@ -1,6 +1,6 @@
 <script setup lang="ts">
+import { CircleHelp, Play } from '@lucide/vue'
 import { computed, ref, watch } from 'vue'
-import { Play } from '@lucide/vue'
 import { formatRuntime } from '../utils'
 import AppDialog from './AppDialog.vue'
 
@@ -9,19 +9,21 @@ const props = defineProps<{
   runtimeMs: number
   /** 该 item 是否已在手动计时中（用于禁用/提示 Start timer 按钮） */
   timerActive?: boolean
-  // autoTimer 特性暂时注释：
-  // /** 该 item 启动后是否自动触发手动计时 */
-  // autoTimer?: boolean
+  /** 该 item 启动后是否自动触发手动计时（autoTimer） */
+  autoTimer?: boolean
 }>()
 
 const emit = defineEmits<{
   'close': []
   'save': [minutes: number]
   'start-timer': []
-  // 'auto-timer': [enabled: boolean] // autoTimer 特性暂时注释
+  'auto-timer': [enabled: boolean]
 }>()
 
 const minutes = ref('0')
+
+// autoTimer 帮助说明弹窗
+const helpOpen = ref(false)
 
 const preview = computed(() => {
   const ms = toMs(minutes.value)
@@ -57,7 +59,7 @@ function onSave() {
       <label class="flex flex-col gap-1">
         <span class="text-xs text-gray-500 dark:text-gray-400">Runtime (minutes)</span>
         <input
-          v-model="minutes" type="number" min="0" step="60" autofocus
+          v-model="minutes" type="number" min="0" step="1" autofocus
           class="w-full rounded border border-gray-400 px-1.5 py-1 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100"
         >
       </label>
@@ -65,6 +67,32 @@ function onSave() {
         Current: {{ currentText }} ({{ runtimeMs }}ms) · input → {{ preview }}
       </p>
     </form>
+
+    <!-- 嵌套在 Edit runtime 弹窗内：Headless UI 依赖 provide/inject 让父 Dialog 识别子 Dialog
+         的 panel 为"内部"，兄弟弹窗会互相视为外部点击而一起关闭 -->
+    <AppDialog :open="helpOpen" title="Manual timer" @close="helpOpen = false">
+      <div class="flex flex-col gap-2.5 text-sm leading-relaxed text-gray-700 dark:text-gray-300">
+        <p class="m-0">
+          <span class="font-semibold text-gray-900 dark:text-gray-100">Manual timer</span> — starts a manual timer for
+          this item and closes the dialog. The running time appears in red next to the runtime; click it again to stop
+          and save it.
+        </p>
+        <p class="m-0">
+          <span class="font-semibold text-gray-900 dark:text-gray-100">Auto switch</span> — when enabled, launching this
+          item automatically starts the manual timer. Process tracking is skipped and the timer keeps running after the
+          program exits. Use it for programs the launcher can't track.
+        </p>
+      </div>
+      <template #actions>
+        <button
+          type="button"
+          class="rounded border border-gray-400 bg-white px-2.5 py-1 hover:bg-gray-200 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 dark:hover:bg-gray-600"
+          @click="helpOpen = false"
+        >
+          OK
+        </button>
+      </template>
+    </AppDialog>
 
     <template #actions>
       <div class="flex w-full items-center justify-between gap-2">
@@ -78,19 +106,25 @@ function onSave() {
             <Play class="h-3.5 w-3.5" />
             Manual timer
           </button>
-          <!-- autoTimer 特性暂时注释：
-          <div class="flex items-center gap-1.5" :title="autoTimer ? 'Auto-start manual timer when this item launches' : 'Do not auto-start manual timer'">
+          <!-- autoTimer：启动 item 时自动触发手动计时，不跟踪进程 -->
+          <div class="flex items-center gap-1">
             <button
-              type="button" role="switch" :aria-checked="autoTimer"
+              type="button" role="switch" :aria-checked="autoTimer" aria-label="Auto timer"
               class="relative h-4 w-7 shrink-0 rounded-full transition-colors"
               :class="autoTimer ? 'bg-blue-500' : 'bg-gray-300 dark:bg-gray-600'"
               @click="emit('auto-timer', !autoTimer)"
             >
               <span class="absolute left-0.5 top-0.5 h-3 w-3 rounded-full bg-white shadow transition-transform" :class="autoTimer ? 'translate-x-3' : ''" />
             </button>
-            <span class="text-xs text-gray-500 dark:text-gray-400">Auto</span>
+            <button
+              type="button"
+              class="flex h-4 w-4 shrink-0 items-center justify-center rounded text-gray-400 hover:bg-gray-200 hover:text-gray-600 dark:text-gray-500 dark:hover:bg-gray-700 dark:hover:text-gray-300"
+              aria-label="Help: manual timer" title="What is Manual timer?"
+              @click="helpOpen = true"
+            >
+              <CircleHelp class="h-3.5 w-3.5" />
+            </button>
           </div>
-          -->
         </div>
         <div class="flex items-center gap-2">
           <button

@@ -19,24 +19,28 @@ import { useModalDialog } from './composables/useModalDialog'
 import { useStore } from './composables/useStore'
 import { useTheme } from './composables/useTheme'
 import { useToast } from './composables/useToast'
-import { showError } from './utils'
+import { formatRuntime, showError } from './utils'
 
 const { activeTab, state, store, addFilesInto, addTab, renameItem, removeItem, setActiveTab, moveTab, renameTab, removeTab, updateItemIcon, updateItem, batchUpdateIcons, save, refresh, setGameMode, setRuntimeMs, setAbsolutePaths, convertToAbsolute, convertToRelative, duplicateItem, moveItemToTab, copyItemToTab } = useStore()
 const { theme, setTheme } = useTheme()
 const { toasts, showToast } = useToast()
 const autoRuntime = useAutoRuntime()
 const timer = useManualTimer()
-// 计时中 item 的累计分钟数（elapsedMs 每 30s 刷新一次，驱动 +Xm 显示）
-const timerMinutes = computed(() => {
-  if (!timer.elapsedMs.value) {
-    return '--'
-  }
-  const m = Math.floor(timer.elapsedMs.value / 60000)
-  if (!m) {
-    return '⌛'
-  }
-  return `+${m}m`
-})
+// 指定 item 手动计时的显示文案（多计时并行，按 guid 计算；elapsedMs 每 30s 刷新）。
+// 内容展示复用 formatRuntime，保证与运行时长的格式化口径一致。
+function timerMinutes(guid: string) {
+  return formatRuntime(timer.elapsedMs(guid))
+}
+
+// 该 item 应展示的 runtime（ms）。autoTimer 项不触发自动计时：只显示 baseline，
+// 不叠加进程运行增量；运行/时长完全走手动计时。
+function rowRuntimeMs(guid: string): number {
+  const st = state.value[guid]
+  const baseline = st?.runtime_ms ?? store.value.apps[guid]?.runtime_ms ?? 0
+  if (timer.isAutoTimer(guid))
+    return baseline
+  return autoRuntime.liveMs(baseline, st?.running ?? false, st?.start_at ?? 0)
+}
 
 const themeSequence: Theme[] = ['auto', 'light', 'dark']
 const themeIcon = computed(() => theme.value === 'dark' ? Moon : theme.value === 'light' ? Sun : SunMoon)
@@ -171,28 +175,26 @@ async function commitTimerMs(guid: string, ms: number) {
 }
 
 function onStartTimer(guid: string) {
-  timer.start(guid, (prevGuid, ms) => {
-    commitTimerMs(prevGuid, ms)
-  })
+  timer.start(guid)
   runtimeEditOpen.value = false
 }
 
-function onStopTimer() {
-  timer.stop(async (g, ms) => {
+function onStopTimer(guid: string) {
+  timer.stop(guid, async (ms) => {
     if (ms <= 0) {
       showToast('Timer stopped')
       return
     }
-    await commitTimerMs(g, ms)
+    await commitTimerMs(guid, ms)
     showToast('Runtime saved')
   })
 }
 
-// === autoTimer（启动后自动触发手动计时）暂时注释掉，便于区分"自动=进程运行"与"手动" ===
-// function onLaunched(guid: string) {
-//   if (timer.isAutoTimer(guid))
-//     timer.start(guid, undefined, false)
-// }
+// 启动成功后，若该 item 开启了 autoTimer，自动触发手动计时（不抢占/不重置其它计时）。
+function onLaunched(guid: string) {
+  if (timer.isAutoTimer(guid))
+    timer.start(guid)
+}
 
 function openItemRename(item: AppItem) {
   modalTarget.value = { kind: 'item', guid: item.guid }
@@ -295,14 +297,14 @@ function onAddFiles() {
     >
       <div class="flex flex-1 items-center justify-end gap-1">
         <button
-          class="flex h-6 w-6 shrink-0 cursor-pointer items-center justify-center rounded text-gray-500 hover:bg-gray-200 dark:text-gray-300 dark:hover:bg-gray-700"
+          class="flex h-6 w-6 shrink-0 items-center justify-center rounded text-gray-500 hover:bg-gray-200 dark:text-gray-300 dark:hover:bg-gray-700"
           title="Add Files" @click="onAddFiles"
         >
           <Plus class="h-4 w-4" />
         </button>
 
         <button
-          class="flex h-6 w-6 shrink-0 cursor-pointer items-center justify-center rounded text-gray-500 hover:bg-gray-200 dark:text-gray-300 dark:hover:bg-gray-700"
+          class="flex h-6 w-6 shrink-0 items-center justify-center rounded text-gray-500 hover:bg-gray-200 dark:text-gray-300 dark:hover:bg-gray-700"
           :title="`Theme: ${themeLabel}`" @click="cycleTheme"
         >
           <component :is="themeIcon" class="h-4 w-4" />
@@ -310,7 +312,7 @@ function onAddFiles() {
 
         <Menu as="div" class="relative">
           <MenuButton
-            class="flex h-6 w-6 shrink-0 cursor-pointer items-center justify-center rounded text-gray-500 hover:bg-gray-200 dark:text-gray-300 dark:hover:bg-gray-700"
+            class="flex h-6 w-6 shrink-0 items-center justify-center rounded text-gray-500 hover:bg-gray-200 dark:text-gray-300 dark:hover:bg-gray-700"
             title="Menu" @click="onMenuButtonClick"
           >
             <Ellipsis class="h-4 w-4" />
@@ -351,13 +353,15 @@ function onAddFiles() {
             <LauncherRow
               v-for="(row, index) in rows" :key="row.item.guid" :item="row.item"
               :icon-url="state[row.item.guid]?.icon_url ?? ''" :running="state[row.item.guid]?.running ?? false"
-              :runtime-ms="autoRuntime.liveMs(state[row.item.guid]?.runtime_ms ?? 0, state[row.item.guid]?.running ?? false, state[row.item.guid]?.start_at ?? 0)" :dragging="draggingIndex === index"
+              :runtime-ms="rowRuntimeMs(row.item.guid)" :dragging="draggingIndex === index"
               :drag-over="dragOverIndex === index && draggingIndex !== null && dragOverIndex !== draggingIndex"
               :game-mode="store.settings.game_mode"
-              :timer-active="timer.isActive(row.item.guid)" :timer-minutes="timerMinutes"
+              :timer-active="timer.isActive(row.item.guid)" :timer-minutes="timerMinutes(row.item.guid)"
+              :auto-timer="timer.isAutoTimer(row.item.guid)"
               @rename="openItemRename(row.item)" @details="openItemEdit(row.item)" @duplicate="duplicateItem(row.item.guid)" @delete="onDeleteRequested(row.item)"
               @refresh="refresh" @icondone="(icon, iconUrl) => onIconDone(icon, iconUrl, row.item)"
-              @edit-runtime="onEditRuntime(row.item.guid)" @stop-timer="onStopTimer"
+              @edit-runtime="onEditRuntime(row.item.guid)" @stop-timer="onStopTimer(row.item.guid)"
+              @launched="onLaunched(row.item.guid)"
               @dragstart="(e: DragEvent) => onDragStart(e, index)" @dragover="onDragOver(index)" @drop="onDrop" @dragend="onDragEnd"
             />
           </TransitionGroup>
@@ -392,7 +396,9 @@ function onAddFiles() {
     <RuntimeEditDialog
       :open="runtimeEditOpen" :runtime-ms="runtimeEditMs"
       :timer-active="timer.isActive(runtimeEditGuid ?? '')"
+      :auto-timer="timer.isAutoTimer(runtimeEditGuid ?? '')"
       @save="onRuntimeSaved" @close="runtimeEditOpen = false" @start-timer="onStartTimer(runtimeEditGuid ?? '')"
+      @auto-timer="(v: boolean) => timer.setAutoTimer(runtimeEditGuid ?? '', v)"
     />
 
     <AppDialog :open="confirmOpen" title="Confirm" @close="closeConfirm">

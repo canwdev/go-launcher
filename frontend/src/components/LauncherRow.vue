@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import type { AppItem } from '../api'
 import { Menu, MenuButton, MenuItem, MenuItems } from '@headlessui/vue'
-import { Clock, Copy, Ellipsis, Folder, Pencil, PencilLine, Trash2 } from '@lucide/vue'
+import { Clock, Copy, Ellipsis, Folder, Pencil, PencilLine, Plus, Timer, Trash2 } from '@lucide/vue'
 import { computed } from 'vue'
-import { ConvertItemToAbsolute, ConvertItemToRelative, Launch, Reveal, Stop, UpdateIcon } from '../api'
+import { ConvertItemToAbsolute, ConvertItemToRelative, Launch, Open, Reveal, Stop, UpdateIcon } from '../api'
 import { useMenuFlip } from '../composables/useMenuFlip'
 import { formatRuntime, isAutoIcon, showError } from '../utils'
 
@@ -18,6 +18,8 @@ const props = defineProps<{
   timerActive?: boolean
   /** 计时分钟展示串（如 +1m / +... / --），由 App 层格式化 */
   timerMinutes?: string
+  /** 该 item 是否启用 autoTimer（启动后自动触发手动计时，不跟踪进程） */
+  autoTimer?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -29,7 +31,7 @@ const emit = defineEmits<{
   'icondone': [icon: string, iconUrl: string]
   'edit-runtime': []
   'stop-timer': []
-  // 'launched': [] // autoTimer 特性暂时注释
+  'launched': []
   'dragstart': [e: DragEvent]
   'dragover': []
   'drop': []
@@ -49,11 +51,12 @@ async function onRun() {
       await Stop(props.item.guid)
     }
     else {
-      // 计时中禁止启动新运行
-      if (props.timerActive)
-        return
-      await Launch(props.item.guid)
-      // emit('launched') // autoTimer 特性暂时注释
+      // autoTimer 项：不跟踪进程（无 Stop / 无自动最小化），仅启动
+      if (props.autoTimer)
+        await Open(props.item.guid)
+      else
+        await Launch(props.item.guid)
+      emit('launched')
     }
   }
   catch (err) {
@@ -71,8 +74,8 @@ function onDoubleClick(e: MouseEvent) {
     return
   if (target?.closest('[data-runtime-edit]'))
     return
-  // autoTimer 特性暂时注释：Launch 成功不再 emit('launched')
-  Launch(props.item.guid).catch(showError)
+  const p = props.autoTimer ? Open(props.item.guid) : Launch(props.item.guid)
+  p.then(() => emit('launched')).catch(showError)
 }
 
 async function run(action: () => Promise<void>) {
@@ -117,18 +120,14 @@ function onRuntimeClick() {
     <span
       v-if="gameMode" data-runtime-edit class="inline-flex shrink-0 items-center gap-0.5 rounded px-0.5"
       :class="timerActive
-        ? 'cursor-pointer text-red-500 hover:text-red-600'
-        : (running ? 'cursor-not-allowed text-gray-500 dark:text-gray-400' : 'cursor-pointer text-gray-500 hover:text-blue-600 hover:underline dark:text-gray-400 dark:hover:text-blue-400')"
+        ? 'text-red-500 hover:text-red-600'
+        : (running ? 'cursor-not-allowed text-gray-500 dark:text-gray-400' : 'text-gray-500 hover:text-blue-600 hover:underline dark:text-gray-400 dark:hover:text-blue-400')"
       :title="timerActive ? 'Click to stop timer and save' : (running ? 'Running — stop the program to edit runtime' : 'Click to edit runtime')"
       @click="onRuntimeClick"
-    ><Clock class="h-3 w-3 shrink-0" />{{ runtimeText }}<template v-if="timerActive"> ({{ timerMinutes }})</template></span>
+    ><Timer v-if="autoTimer" class="h-3 w-3 shrink-0" /><Clock v-else class="h-3 w-3 shrink-0" />{{ runtimeText }}<template v-if="timerActive"> (<Plus class="h-3 w-3" />{{ timerMinutes }})</template></span>
     <button
       class="rounded px-2.5 py-1"
-      :class="timerActive && !running
-        ? 'cursor-not-allowed bg-gray-200 text-gray-400 dark:bg-gray-700 dark:text-gray-500'
-        : (running ? 'bg-red-500 text-white hover:bg-red-600' : 'text-gray-700 hover:bg-gray-200 dark:text-gray-100 dark:hover:bg-gray-700')"
-      :disabled="timerActive && !running"
-      :title="timerActive && !running ? 'Timer running - stop the timer to run' : undefined"
+      :class="(running ? 'bg-red-500 text-white hover:bg-red-600' : 'text-gray-700 hover:bg-gray-200 dark:text-gray-100 dark:hover:bg-gray-700')"
       @click="onRun"
     >
       {{ running ? 'Stop' : 'Run' }}
@@ -137,7 +136,7 @@ function onRuntimeClick() {
     <Menu as="div" class="relative">
       <MenuButton
         class="rounded p-1 text-gray-500 hover:bg-gray-200 dark:text-gray-300 dark:hover:bg-gray-700"
-        :class="timerActive ? 'cursor-not-allowed opacity-50 disabled:hover:bg-transparent dark:disabled:hover:bg-transparent' : 'cursor-pointer'"
+        :class="timerActive ? 'cursor-not-allowed opacity-50 disabled:hover:bg-transparent dark:disabled:hover:bg-transparent' : ''"
         :disabled="timerActive"
         @click="onMenuButtonClick"
       >

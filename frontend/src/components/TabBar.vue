@@ -101,7 +101,7 @@ watch(() => props.dragItemGuid, (v) => {
     <TransitionGroup name="list" tag="div" class="flex items-center gap-1">
       <div
         v-for="(tab, index) in tabs" :key="tab.guid" :draggable="true"
-        class="group relative flex cursor-pointer items-center gap-1 rounded px-2.5 py-1 select-none" :class="[
+        class="group relative flex items-center gap-1 rounded px-2.5 py-1 select-none" :class="[
           tab.guid === activeGuid
             ? 'bg-blue-500 text-white'
             : 'text-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-700',
@@ -155,7 +155,7 @@ watch(() => props.dragItemGuid, (v) => {
     </TransitionGroup>
 
     <button
-      class="flex h-6 w-6 shrink-0 cursor-pointer items-center justify-center rounded text-gray-500 hover:bg-gray-200 dark:text-gray-300 dark:hover:bg-gray-700"
+      class="flex h-6 w-6 shrink-0 items-center justify-center rounded text-gray-500 hover:bg-gray-200 dark:text-gray-300 dark:hover:bg-gray-700"
       title="Add Tab" @click="emit('add')"
     >
       <Plus class="h-4 w-4" />

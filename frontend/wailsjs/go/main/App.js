@@ -38,6 +38,10 @@ export function Launch(arg1) {
   return window['go']['main']['App']['Launch'](arg1);
 }
 
+export function Open(arg1) {
+  return window['go']['main']['App']['Open'](arg1);
+}
+
 export function OpenDirectory(arg1) {
   return window['go']['main']['App']['OpenDirectory'](arg1);
 }

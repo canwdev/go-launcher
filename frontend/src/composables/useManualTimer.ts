@@ -1,38 +1,34 @@
-import { computed, onMounted, onUnmounted, ref } from 'vue'
+import { onMounted, onUnmounted, ref } from 'vue'
 import { useStorage } from '@vueuse/core'
 
 /**
  * 前端手动计时器（状态完全由前端维护，useStorage 响应式持久化到 localStorage）：
- * - start(guid)：开始为某个 item 计时（同一时间仅一个计时；若已有则在开始新计时前先回调写入旧的）
- * - stop(onSave)：停止计时，把累计毫秒数交给 onSave 回调（由调用方写入后端）
- * - elapsedMs：当前计时累计毫秒数（computed，每 30s 刷新一次，驱动 runtimeText 的 (+Xm) 显示）
+ * - start(guid)：开始为某个 item 计时；多 item 可并行计时，互不抢占
+ * - stop(guid, onSave)：停止指定 item 的计时，把累计毫秒数交给 onSave 回调（由调用方写入后端）
+ * - elapsedMs(guid)：指定 item 的累计毫秒数（每 30s 刷新一次，驱动 runtimeText 的 (+Xm) 显示）
+ * - isAutoTimer / setAutoTimer：每 item 的"启动后自动触发手动计时"开关（guid → boolean）
  */
 
-const STORAGE_KEY = 'launcher-manual-timer'
-// const AUTO_TIMER_KEY = 'launcher-auto-timer' // autoTimer 特性暂时注释
+// 新 key：多计时并行格式（{ guid: startAt }）。旧单计时数据（launcher-manual-timer）不再兼容。
+const TIMERS_KEY = 'launcher-manual-timers'
+const AUTO_TIMER_KEY = 'launcher-auto-timer'
 const TICK_MS = 30_000
 
-interface PersistedTimer {
-  guid: string
-  startAt: number
-}
-
 export function useManualTimer() {
-  const activeGuid = ref<string | null>(null)
-  const startAt = ref(0)
-  // 30s tick：仅用于驱动 elapsedMs 的响应式重算，显示分钟粒度足够。
-  const tick = ref(0)
-  // 响应式持久化：读写自动同步 localStorage，重启应用后计时继续。
+  // guid → startAt(ms)，多 item 可并行计时。
   // 默认值用对象（而非 null）→ useStorage 走 object serializer（JSON 读写），
   // 避免 null 默认值落到 'any' serializer 把对象 String 成 "[object Object]"。
-  const persisted = useStorage<PersistedTimer | null>(STORAGE_KEY, { guid: '', startAt: 0 })
-  // autoTimer 特性暂时注释：每 item 的"启动后自动触发手动计时"开关（guid → boolean）
-  // const autoTimerEnabled = useStorage<Record<string, boolean>>(AUTO_TIMER_KEY, {})
+  const timers = ref<Record<string, number>>({})
+  // 30s tick：仅用于驱动 elapsedMs 的响应式重算，显示分钟粒度足够。
+  const tick = ref(0)
+  const persisted = useStorage<Record<string, number>>(TIMERS_KEY, {})
+  const autoTimerEnabled = useStorage<Record<string, boolean>>(AUTO_TIMER_KEY, {})
 
   let interval: number | undefined
 
   function startInterval() {
-    stopInterval()
+    if (interval)
+      return
     interval = window.setInterval(() => {
       tick.value = Date.now()
     }, TICK_MS)
@@ -45,73 +41,74 @@ export function useManualTimer() {
     }
   }
 
-  const elapsedMs = computed(() => {
-    // 依赖 tick，使每 30s 刷新一次显示
-    void tick.value
-    return activeGuid.value ? Math.max(0, Date.now() - startAt.value) : 0
-  })
-
-  function isActive(guid: string): boolean {
-    return activeGuid.value === guid
+  function persist() {
+    persisted.value = { ...timers.value }
   }
 
-  // autoTimer 特性暂时注释：
-  // function isAutoTimer(guid: string): boolean {
-  //   return autoTimerEnabled.value[guid] ?? false
-  // }
-  // function setAutoTimer(guid: string, enabled: boolean) {
-  //   autoTimerEnabled.value = { ...autoTimerEnabled.value, [guid]: enabled }
-  // }
+  function isActive(guid: string): boolean {
+    return timers.value[guid] != null
+  }
+
+  function elapsedMs(guid: string): number {
+    // 依赖 tick，使每 30s 刷新一次显示
+    void tick.value
+    const s = timers.value[guid]
+    return s ? Math.max(0, Date.now() - s) : 0
+  }
+
+  function isAutoTimer(guid: string): boolean {
+    return autoTimerEnabled.value[guid] ?? false
+  }
+
+  function setAutoTimer(guid: string, enabled: boolean) {
+    autoTimerEnabled.value = { ...autoTimerEnabled.value, [guid]: enabled }
+  }
 
   /**
-   * 开始计时。若已有其它 item 在计时：
-   * - steal=true（手动触发）：先停止旧计时并把累计时间交给 onStopped 回调；
-   * - steal=false（auto 触发）：直接跳过，不抢占正在进行的计时。
+   * 开始为指定 item 计时。已在计时则不重置（auto 触发时避免重置正在进行的计时）。
+   * 多计时并行：不影响其它 item 的计时。
    */
-  function start(guid: string, onStopped?: (guid: string, ms: number) => void, steal = true) {
-    if (activeGuid.value && activeGuid.value !== guid) {
-      if (!steal)
-        return
-      const prevGuid = activeGuid.value
-      const prevMs = Math.max(0, Date.now() - startAt.value)
-      activeGuid.value = null
-      startAt.value = 0
-      persisted.value = null
-      onStopped?.(prevGuid, prevMs)
+  function start(guid: string) {
+    if (timers.value[guid] == null) {
+      timers.value = { ...timers.value, [guid]: Date.now() }
+      persist()
     }
-    activeGuid.value = guid
-    startAt.value = Date.now()
-    persisted.value = { guid, startAt: startAt.value }
     startInterval()
   }
 
   /**
-   * 停止计时，把累计毫秒数交给 onSave 回调（调用方负责写入后端 + toast）。
+   * 停止指定 item 的计时，把累计毫秒数交给 onSave 回调（调用方负责写入后端 + toast）。
    */
-  function stop(onSave: (guid: string, ms: number) => void) {
-    if (!activeGuid.value)
+  function stop(guid: string, onSave: (ms: number) => void) {
+    const s = timers.value[guid]
+    if (s == null)
       return
-    const guid = activeGuid.value
-    const ms = Math.max(0, Date.now() - startAt.value)
-    activeGuid.value = null
-    startAt.value = 0
-    persisted.value = null
-    stopInterval()
-    onSave(guid, ms)
+    const ms = Math.max(0, Date.now() - s)
+    const next = { ...timers.value }
+    delete next[guid]
+    timers.value = next
+    persist()
+    if (Object.keys(timers.value).length === 0)
+      stopInterval()
+    onSave(ms)
   }
 
   onMounted(() => {
-    const t = persisted.value
-    // t.guid truthy：排除从未计时的默认值 { guid: '', startAt: 0 } 与坏数据
-    if (t && t.guid && typeof t.startAt === 'number') {
-      activeGuid.value = t.guid
-      startAt.value = t.startAt
-      startInterval()
+    const saved = persisted.value
+    if (saved && typeof saved === 'object') {
+      const valid: Record<string, number> = {}
+      for (const [g, s] of Object.entries(saved)) {
+        if (typeof s === 'number' && s > 0)
+          valid[g] = s
+      }
+      if (Object.keys(valid).length > 0) {
+        timers.value = valid
+        startInterval()
+      }
     }
   })
 
   onUnmounted(stopInterval)
 
-  // autoTimer 特性暂时注释：不返回 isAutoTimer / setAutoTimer
-  return { activeGuid, isActive, elapsedMs, start, stop }
+  return { isActive, isAutoTimer, setAutoTimer, elapsedMs, start, stop }
 }
