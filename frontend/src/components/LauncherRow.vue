@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { AppItem } from '../api'
 import { Menu, MenuButton, MenuItem, MenuItems } from '@headlessui/vue'
-import { Copy, Ellipsis, Folder, Pencil, PencilLine, Trash2 } from '@lucide/vue'
+import { Clock, Copy, Ellipsis, Folder, Pencil, PencilLine, Trash2 } from '@lucide/vue'
 import { computed } from 'vue'
 import { ConvertItemToAbsolute, ConvertItemToRelative, Launch, Reveal, Stop, UpdateIcon } from '../api'
 import { useMenuFlip } from '../composables/useMenuFlip'
@@ -15,6 +15,9 @@ const props = defineProps<{
   gameMode?: boolean
   dragging?: boolean
   dragOver?: boolean
+  timerActive?: boolean
+  /** 计时分钟展示串（如 +1m / +... / --），由 App 层格式化 */
+  timerMinutes?: string
 }>()
 
 const emit = defineEmits<{
@@ -25,6 +28,8 @@ const emit = defineEmits<{
   'refresh': []
   'icondone': [icon: string, iconUrl: string]
   'edit-runtime': []
+  'stop-timer': []
+  // 'launched': [] // autoTimer 特性暂时注释
   'dragstart': [e: DragEvent]
   'dragover': []
   'drop': []
@@ -39,10 +44,17 @@ const { onMenuButtonClick, menuPosition } = useMenuFlip({ estimate: 260 })
 
 async function onRun() {
   try {
-    if (props.running)
+    if (props.running) {
+      // 计时中允许 Stop（否则 auto_timer 启动后程序将无法停止）
       await Stop(props.item.guid)
-    else
+    }
+    else {
+      // 计时中禁止启动新运行
+      if (props.timerActive)
+        return
       await Launch(props.item.guid)
+      // emit('launched') // autoTimer 特性暂时注释
+    }
   }
   catch (err) {
     showError(err)
@@ -50,7 +62,8 @@ async function onRun() {
 }
 
 function onDoubleClick(e: MouseEvent) {
-  if (props.running)
+  // Manual timer running: no launching at all (button and dbl-click both blocked).
+  if (props.timerActive || props.running)
     return
   const target = e.target as HTMLElement | null
   // Only launch when double-clicking non-interactive areas (not buttons / runtime edit).
@@ -58,6 +71,7 @@ function onDoubleClick(e: MouseEvent) {
     return
   if (target?.closest('[data-runtime-edit]'))
     return
+  // autoTimer 特性暂时注释：Launch 成功不再 emit('launched')
   Launch(props.item.guid).catch(showError)
 }
 
@@ -68,6 +82,19 @@ async function run(action: () => Promise<void>) {
   catch (err) {
     showError(err)
   }
+}
+
+// Runtime text click: while a manual timer is active the click stops the timer
+// (and saves) — even if the program is running, otherwise auto_timer would deadlock
+// the row. Otherwise running disables editing; else it opens the edit dialog.
+function onRuntimeClick() {
+  if (props.timerActive) {
+    emit('stop-timer')
+    return
+  }
+  if (props.running)
+    return
+  emit('edit-runtime')
 }
 </script>
 
@@ -88,14 +115,20 @@ async function run(action: () => Promise<void>) {
     <span v-else class="h-7 w-7 shrink-0 object-contain" />
     <span class="min-w-0 flex-1 truncate">{{ item.name }}</span>
     <span
-      v-if="gameMode" data-runtime-edit class="shrink-0 rounded px-0.5 text-gray-500 dark:text-gray-400"
-      :class="running ? 'cursor-not-allowed' : 'cursor-pointer hover:text-blue-600 hover:underline dark:hover:text-blue-400'"
-      :title="running ? 'Running — stop the program to edit runtime' : 'Click to edit runtime'"
-      @click="!running && emit('edit-runtime')"
-    >{{ runtimeText }}</span>
+      v-if="gameMode" data-runtime-edit class="inline-flex shrink-0 items-center gap-0.5 rounded px-0.5"
+      :class="timerActive
+        ? 'cursor-pointer text-red-500 hover:text-red-600'
+        : (running ? 'cursor-not-allowed text-gray-500 dark:text-gray-400' : 'cursor-pointer text-gray-500 hover:text-blue-600 hover:underline dark:text-gray-400 dark:hover:text-blue-400')"
+      :title="timerActive ? 'Click to stop timer and save' : (running ? 'Running — stop the program to edit runtime' : 'Click to edit runtime')"
+      @click="onRuntimeClick"
+    ><Clock class="h-3 w-3 shrink-0" />{{ runtimeText }}<template v-if="timerActive"> ({{ timerMinutes }})</template></span>
     <button
-      class="rounded px-2.5 py-1 cursor-pointer"
-      :class="running ? 'bg-red-500 text-white hover:bg-red-600' : 'text-gray-700 hover:bg-gray-200 dark:text-gray-100 dark:hover:bg-gray-700'"
+      class="rounded px-2.5 py-1"
+      :class="timerActive && !running
+        ? 'cursor-not-allowed bg-gray-200 text-gray-400 dark:bg-gray-700 dark:text-gray-500'
+        : (running ? 'bg-red-500 text-white hover:bg-red-600' : 'text-gray-700 hover:bg-gray-200 dark:text-gray-100 dark:hover:bg-gray-700')"
+      :disabled="timerActive && !running"
+      :title="timerActive && !running ? 'Timer running - stop the timer to run' : undefined"
       @click="onRun"
     >
       {{ running ? 'Stop' : 'Run' }}
@@ -103,7 +136,9 @@ async function run(action: () => Promise<void>) {
 
     <Menu as="div" class="relative">
       <MenuButton
-        class="cursor-pointer rounded p-1 text-gray-500 hover:bg-gray-200 dark:text-gray-300 dark:hover:bg-gray-700"
+        class="rounded p-1 text-gray-500 hover:bg-gray-200 dark:text-gray-300 dark:hover:bg-gray-700"
+        :class="timerActive ? 'cursor-not-allowed opacity-50 disabled:hover:bg-transparent dark:disabled:hover:bg-transparent' : 'cursor-pointer'"
+        :disabled="timerActive"
         @click="onMenuButtonClick"
       >
         <Ellipsis class="h-4 w-4" />

@@ -1,4 +1,5 @@
 import { onMounted, onUnmounted, ref, watch } from 'vue'
+import { useStorage } from '@vueuse/core'
 
 export type Theme = 'auto' | 'light' | 'dark'
 
@@ -6,10 +7,12 @@ const STORAGE_KEY = 'launcher-theme'
 
 const validThemes: Theme[] = ['auto', 'light', 'dark']
 
-function loadTheme(): Theme {
-  const stored = localStorage.getItem(STORAGE_KEY)
-  return (validThemes as string[]).includes(stored ?? '') ? (stored as Theme) : 'auto'
-}
+// 模块级响应式持久化：main.ts 挂载前也能读取（避免主题闪烁），写入自动同步 localStorage
+const storedTheme = useStorage<Theme>(STORAGE_KEY, 'auto')
+
+// 若历史存储值非法，归一到默认值
+if (!validThemes.includes(storedTheme.value))
+  storedTheme.value = 'auto'
 
 function isDark(theme: Theme): boolean {
   if (theme === 'dark')
@@ -20,11 +23,11 @@ function isDark(theme: Theme): boolean {
 }
 
 export function applyStoredTheme() {
-  document.documentElement.classList.toggle('dark', isDark(loadTheme()))
+  document.documentElement.classList.toggle('dark', isDark(storedTheme.value))
 }
 
 export function useTheme() {
-  const theme = ref<Theme>(loadTheme())
+  const theme = storedTheme
   const dark = ref(false)
 
   function update() {
@@ -33,8 +36,7 @@ export function useTheme() {
   }
 
   function setTheme(t: Theme) {
-    theme.value = t
-    localStorage.setItem(STORAGE_KEY, t)
+    theme.value = t // useStorage 自动写回 localStorage
     update()
   }
 

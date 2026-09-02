@@ -50,7 +50,8 @@ type AppStore struct {
 
 type ItemState struct {
 	Running   bool   `json:"running"`
-	RuntimeMs int64  `json:"runtime_ms"`
+	RuntimeMs int64  `json:"runtime_ms"`           // persisted baseline (accumulated)
+	StartAt   int64  `json:"start_at,omitempty"`   // unix ms of process start, 0 when not running
 	IconURL   string `json:"icon_url,omitempty"`
 }
 
@@ -253,13 +254,9 @@ func NewApp() *App {
 
 func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
-	go func() {
-		tick := time.NewTicker(30 * time.Second)
-		defer tick.Stop()
-		for range tick.C {
-			a.emitState()
-		}
-	}()
+	// Frontend drives its own 30s display refresh (useAutoRuntime); the old
+	// backend 30s state tick was redundant and has been removed. State is still
+	// pushed on launch/stop/icon changes via emitState.
 }
 
 func (a *App) shutdown(_ context.Context) {
@@ -320,7 +317,9 @@ func (a *App) buildState() map[string]ItemState {
 		st := ItemState{IconURL: a.iconURL(app.Icon), RuntimeMs: a.runtimeStats[guid]}
 		if p, ok := a.running[guid]; ok {
 			st.Running = true
-			st.RuntimeMs += time.Since(p.start).Milliseconds()
+			// Frontend computes the live elapsed (now - start_at); the backend only
+			// reports the process start time and the accumulated baseline.
+			st.StartAt = p.start.UnixMilli()
 		}
 		state[guid] = st
 	}

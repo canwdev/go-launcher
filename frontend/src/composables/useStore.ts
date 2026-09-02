@@ -1,5 +1,6 @@
 import type { AppData, AppItem, AppStore, ItemState } from '../api'
 import { onMounted, onUnmounted, ref } from 'vue'
+import { useStorage } from '@vueuse/core'
 import { EventsOff, EventsOn, OnFileDrop } from '../../wailsjs/runtime/runtime'
 import { AddFiles, AddPaths, ConvertToAbsolute, ConvertToRelative, GetData, SaveData, SetRuntimeMs, UpdateIcon } from '../api'
 import { debounce, isAutoIcon, randomUUID, showError } from '../utils'
@@ -34,14 +35,12 @@ function newStore(): Store {
   }
 }
 
-function loadActiveTab(): string {
-  return localStorage.getItem(ACTIVE_TAB_KEY) ?? ''
-}
-
 export function useStore() {
   const store = ref<Store>(newStore())
   const state = ref<Record<string, ItemState>>({})
   const activeTab = ref<Category | null>(null)
+  // 响应式持久化：当前激活 tab 自动同步 localStorage
+  const savedActiveTab = useStorage<string>(ACTIVE_TAB_KEY, '')
 
   function applyData(data: AppData) {
     store.value = data.store as unknown as Store
@@ -69,27 +68,27 @@ export function useStore() {
   const save = debounce(saveNow, 300)
 
   function forceActiveTab() {
-    const saved = loadActiveTab()
+    const saved = savedActiveTab.value
     let tab = store.value.categories.find(c => c.guid === saved) ?? null
     if (!tab && store.value.categories.length)
       tab = store.value.categories[0]!
     activeTab.value = tab
     if (tab)
-      localStorage.setItem(ACTIVE_TAB_KEY, tab.guid)
+      savedActiveTab.value = tab.guid
   }
 
   function ensureActive() {
     if (!activeTab.value && store.value.categories.length) {
       const t = store.value.categories[0]!
       activeTab.value = t
-      localStorage.setItem(ACTIVE_TAB_KEY, t.guid)
+      savedActiveTab.value = t.guid
     }
   }
 
   function setActiveTab(guid: string) {
     activeTab.value = store.value.categories.find(c => c.guid === guid) ?? null
     if (activeTab.value)
-      localStorage.setItem(ACTIVE_TAB_KEY, guid)
+      savedActiveTab.value = guid
   }
 
   async function addTab(name = 'New Tab') {
@@ -106,7 +105,7 @@ export function useStore() {
     if (activeTab.value?.guid === guid) {
       const next = store.value.categories[Math.min(idx, store.value.categories.length - 1)] ?? null
       activeTab.value = next
-      localStorage.setItem(ACTIVE_TAB_KEY, next?.guid ?? '')
+      savedActiveTab.value = next?.guid ?? ''
     }
     pruneOrphans()
     await save()

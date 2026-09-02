@@ -59,6 +59,7 @@ export namespace main {
 	export class ItemState {
 	    running: boolean;
 	    runtime_ms: number;
+	    start_at?: number;
 	    icon_url?: string;
 	
 	    static createFrom(source: any = {}) {
@@ -69,6 +70,7 @@ export namespace main {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.running = source["running"];
 	        this.runtime_ms = source["runtime_ms"];
+	        this.start_at = source["start_at"];
 	        this.icon_url = source["icon_url"];
 	    }
 	}

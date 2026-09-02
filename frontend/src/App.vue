@@ -12,6 +12,8 @@ import LauncherRow from './components/LauncherRow.vue'
 import RuntimeEditDialog from './components/RuntimeEditDialog.vue'
 import TabBar from './components/TabBar.vue'
 import { useConfirmDialog } from './composables/useConfirmDialog'
+import { useAutoRuntime } from './composables/useAutoRuntime'
+import { useManualTimer } from './composables/useManualTimer'
 import { useMenuFlip } from './composables/useMenuFlip'
 import { useModalDialog } from './composables/useModalDialog'
 import { useStore } from './composables/useStore'
@@ -22,6 +24,19 @@ import { showError } from './utils'
 const { activeTab, state, store, addFilesInto, addTab, renameItem, removeItem, setActiveTab, moveTab, renameTab, removeTab, updateItemIcon, updateItem, batchUpdateIcons, save, refresh, setGameMode, setRuntimeMs, setAbsolutePaths, convertToAbsolute, convertToRelative, duplicateItem, moveItemToTab, copyItemToTab } = useStore()
 const { theme, setTheme } = useTheme()
 const { toasts, showToast } = useToast()
+const autoRuntime = useAutoRuntime()
+const timer = useManualTimer()
+// 计时中 item 的累计分钟数（elapsedMs 每 30s 刷新一次，驱动 +Xm 显示）
+const timerMinutes = computed(() => {
+  if (!timer.elapsedMs.value) {
+    return '--'
+  }
+  const m = Math.floor(timer.elapsedMs.value / 60000)
+  if (!m) {
+    return '⌛'
+  }
+  return `+${m}m`
+})
 
 const themeSequence: Theme[] = ['auto', 'light', 'dark']
 const themeIcon = computed(() => theme.value === 'dark' ? Moon : theme.value === 'light' ? Sun : SunMoon)
@@ -146,6 +161,38 @@ function onRuntimeSaved(minutes: number) {
     return
   setRuntimeMs(runtimeEditGuid.value, minutes * 60000).catch(showError)
 }
+
+// 把计时累计 ms 加到该 item 当前 runtime 后写回后端（SetRuntimeMs 是覆盖写，需前端算总和）。
+async function commitTimerMs(guid: string, ms: number) {
+  if (ms <= 0)
+    return
+  const current = state.value[guid]?.runtime_ms ?? store.value.apps[guid]?.runtime_ms ?? 0
+  await setRuntimeMs(guid, current + ms).catch(showError)
+}
+
+function onStartTimer(guid: string) {
+  timer.start(guid, (prevGuid, ms) => {
+    commitTimerMs(prevGuid, ms)
+  })
+  runtimeEditOpen.value = false
+}
+
+function onStopTimer() {
+  timer.stop(async (g, ms) => {
+    if (ms <= 0) {
+      showToast('Timer stopped')
+      return
+    }
+    await commitTimerMs(g, ms)
+    showToast('Runtime saved')
+  })
+}
+
+// === autoTimer（启动后自动触发手动计时）暂时注释掉，便于区分"自动=进程运行"与"手动" ===
+// function onLaunched(guid: string) {
+//   if (timer.isAutoTimer(guid))
+//     timer.start(guid, undefined, false)
+// }
 
 function openItemRename(item: AppItem) {
   modalTarget.value = { kind: 'item', guid: item.guid }
@@ -304,12 +351,13 @@ function onAddFiles() {
             <LauncherRow
               v-for="(row, index) in rows" :key="row.item.guid" :item="row.item"
               :icon-url="state[row.item.guid]?.icon_url ?? ''" :running="state[row.item.guid]?.running ?? false"
-              :runtime-ms="state[row.item.guid]?.runtime_ms ?? 0" :dragging="draggingIndex === index"
+              :runtime-ms="autoRuntime.liveMs(state[row.item.guid]?.runtime_ms ?? 0, state[row.item.guid]?.running ?? false, state[row.item.guid]?.start_at ?? 0)" :dragging="draggingIndex === index"
               :drag-over="dragOverIndex === index && draggingIndex !== null && dragOverIndex !== draggingIndex"
               :game-mode="store.settings.game_mode"
+              :timer-active="timer.isActive(row.item.guid)" :timer-minutes="timerMinutes"
               @rename="openItemRename(row.item)" @details="openItemEdit(row.item)" @duplicate="duplicateItem(row.item.guid)" @delete="onDeleteRequested(row.item)"
               @refresh="refresh" @icondone="(icon, iconUrl) => onIconDone(icon, iconUrl, row.item)"
-              @edit-runtime="onEditRuntime(row.item.guid)"
+              @edit-runtime="onEditRuntime(row.item.guid)" @stop-timer="onStopTimer"
               @dragstart="(e: DragEvent) => onDragStart(e, index)" @dragover="onDragOver(index)" @drop="onDrop" @dragend="onDragEnd"
             />
           </TransitionGroup>
@@ -342,7 +390,9 @@ function onAddFiles() {
     <ItemEditDialog :open="editOpen" :item="editingItem" @save="onItemSaved" @close="editOpen = false" />
 
     <RuntimeEditDialog
-      :open="runtimeEditOpen" :runtime-ms="runtimeEditMs" @save="onRuntimeSaved" @close="runtimeEditOpen = false"
+      :open="runtimeEditOpen" :runtime-ms="runtimeEditMs"
+      :timer-active="timer.isActive(runtimeEditGuid ?? '')"
+      @save="onRuntimeSaved" @close="runtimeEditOpen = false" @start-timer="onStartTimer(runtimeEditGuid ?? '')"
     />
 
     <AppDialog :open="confirmOpen" title="Confirm" @close="closeConfirm">
