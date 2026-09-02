@@ -49,7 +49,7 @@ function onSave() {
       <label class="flex flex-col gap-1">
         <span class="text-xs text-gray-500 dark:text-gray-400">Runtime (minutes)</span>
         <input
-          v-model="minutes" type="number" min="0" step="1" autofocus
+          v-model="minutes" type="number" min="0" step="60" autofocus
           class="w-full rounded border border-gray-400 px-1.5 py-1 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100"
         >
       </label>

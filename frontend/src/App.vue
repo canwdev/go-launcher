@@ -2,7 +2,7 @@
 import type { Component } from 'vue'
 import type { AppItem } from './api'
 import type { Theme } from './composables/useTheme'
-import { Menu, MenuButton, MenuItem, MenuItems, TransitionRoot } from '@headlessui/vue'
+import { Menu, MenuButton, MenuItem, MenuItems } from '@headlessui/vue'
 import { Check, Ellipsis, FolderOpen, Gamepad2, Images, Moon, Plus, RefreshCw, Sun, SunMoon } from '@lucide/vue'
 import { computed, ref } from 'vue'
 import { OpenDirectory } from './api'
@@ -12,6 +12,7 @@ import LauncherRow from './components/LauncherRow.vue'
 import RuntimeEditDialog from './components/RuntimeEditDialog.vue'
 import TabBar from './components/TabBar.vue'
 import { useConfirmDialog } from './composables/useConfirmDialog'
+import { useMenuFlip } from './composables/useMenuFlip'
 import { useModalDialog } from './composables/useModalDialog'
 import { useStore } from './composables/useStore'
 import { useTheme } from './composables/useTheme'
@@ -79,6 +80,9 @@ const appMenuItems: MenuEntry[] = [
     onClick: onBatchUpdateIcons,
   },
 ]
+
+// Flip the main menu upward when there is not enough room below the button.
+const { onMenuButtonClick, menuPosition } = useMenuFlip({ estimate: 260 })
 
 const draggingIndex = ref<number | null>(null)
 const dragFromIndex = ref<number | null>(null)
@@ -260,17 +264,14 @@ function onAddFiles() {
         <Menu as="div" class="relative">
           <MenuButton
             class="flex h-6 w-6 shrink-0 cursor-pointer items-center justify-center rounded text-gray-500 hover:bg-gray-200 dark:text-gray-300 dark:hover:bg-gray-700"
-            title="Menu"
+            title="Menu" @click="onMenuButtonClick"
           >
             <Ellipsis class="h-4 w-4" />
           </MenuButton>
-          <TransitionRoot
-            enter="transition duration-100 ease-out" enter-from="opacity-0 scale-95"
-            enter-to="opacity-100 scale-100" leave="transition duration-75 ease-in" leave-from="opacity-100 scale-100"
-            leave-to="opacity-0 scale-95"
-          >
+          <Teleport to="body">
             <MenuItems
-              class="absolute right-0 z-10 mt-1 w-56 origin-top-right rounded border border-gray-300 bg-white py-1 shadow-md focus:outline-none dark:border-gray-700 dark:bg-gray-800"
+              class="w-56 overflow-y-auto rounded border border-gray-300 bg-white py-1 shadow-md focus:outline-none dark:border-gray-700 dark:bg-gray-800"
+              :style="menuPosition('right')"
             >
               <template v-for="item in appMenuItems" :key="item.key">
                 <div v-if="item.divider" class="my-1 border-t border-gray-200 dark:border-gray-700" />
@@ -288,7 +289,7 @@ function onAddFiles() {
                 </MenuItem>
               </template>
             </MenuItems>
-          </TransitionRoot>
+          </Teleport>
         </Menu>
       </div>
     </TabBar>

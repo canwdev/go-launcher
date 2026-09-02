@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import type { AppItem } from '../api'
-import { Menu, MenuButton, MenuItem, MenuItems, TransitionRoot } from '@headlessui/vue'
+import { Menu, MenuButton, MenuItem, MenuItems } from '@headlessui/vue'
 import { Copy, Ellipsis, Folder, ImageUp, Pencil, PencilLine, Trash2 } from '@lucide/vue'
 import { computed } from 'vue'
 import { ConvertItemToAbsolute, ConvertItemToRelative, Launch, Reveal, Stop, UpdateIcon } from '../api'
+import { useMenuFlip } from '../composables/useMenuFlip'
 import { formatRuntime, isAutoIcon, showError } from '../utils'
 
 const props = defineProps<{
@@ -31,6 +32,10 @@ const emit = defineEmits<{
 }>()
 
 const runtimeText = computed(() => formatRuntime(props.runtimeMs ?? 0))
+
+// Flip the row menu upward when there is not enough room below, so it never
+// overflows the window and causes a global scrollbar.
+const { onMenuButtonClick, menuPosition } = useMenuFlip({ estimate: 260 })
 
 async function onRun() {
   try {
@@ -99,16 +104,14 @@ async function run(action: () => Promise<void>) {
     <Menu as="div" class="relative">
       <MenuButton
         class="cursor-pointer rounded p-1 text-gray-500 hover:bg-gray-200 dark:text-gray-300 dark:hover:bg-gray-700"
+        @click="onMenuButtonClick"
       >
         <Ellipsis class="h-4 w-4" />
       </MenuButton>
-      <TransitionRoot
-        enter="transition duration-100 ease-out" enter-from="opacity-0 scale-95"
-        enter-to="opacity-100 scale-100" leave="transition duration-75 ease-in" leave-from="opacity-100 scale-100"
-        leave-to="opacity-0 scale-95"
-      >
+      <Teleport to="body">
         <MenuItems
-          class="absolute right-0 z-10 mt-1 w-48 origin-top-right rounded border border-gray-300 bg-white py-1 shadow-md focus:outline-none dark:border-gray-700 dark:bg-gray-800"
+          class="w-54 overflow-y-auto rounded border border-gray-300 bg-white py-1 shadow-md focus:outline-none dark:border-gray-700 dark:bg-gray-800"
+          :style="menuPosition('right')"
         >
           <MenuItem v-slot="{ active }">
             <button
@@ -186,7 +189,7 @@ async function run(action: () => Promise<void>) {
             </button>
           </MenuItem>
         </MenuItems>
-      </TransitionRoot>
+      </Teleport>
     </Menu>
   </div>
 </template>

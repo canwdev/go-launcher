@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import type { Category } from '../composables/useStore'
-import { Menu, MenuButton, MenuItem, MenuItems, TransitionRoot } from '@headlessui/vue'
+import { Menu, MenuButton, MenuItem, MenuItems } from '@headlessui/vue'
 import { Ellipsis, PencilLine, Plus, Trash2 } from '@lucide/vue'
 import { ref, watch } from 'vue'
+import { useMenuFlip } from '../composables/useMenuFlip'
 
 const props = defineProps<{
   tabs: Category[]
@@ -30,6 +31,9 @@ const overIndex = ref<number | null>(null)
 // Item-over-tab drop targets (move by default, copy while Ctrl/Meta held).
 const itemOverIndex = ref<number | null>(null)
 const itemCopy = ref(false)
+
+// Flip the tab menu upward when there is not enough room below.
+const { onMenuButtonClick, menuPosition } = useMenuFlip({ estimate: 100 })
 
 function onDragStart(index: number) {
   fromIndex.value = index
@@ -117,17 +121,14 @@ watch(() => props.dragItemGuid, (v) => {
         <Menu as="div" class="relative">
           <MenuButton
             class="flex h-4 w-4 items-center justify-center rounded text-xs opacity-0 hover:bg-white/20 group-hover:opacity-100"
-            @click.stop
+            @click.stop="onMenuButtonClick"
           >
             <Ellipsis class="h-3 w-3" />
           </MenuButton>
-          <TransitionRoot
-            enter="transition duration-100 ease-out" enter-from="opacity-0 scale-95"
-            enter-to="opacity-100 scale-100" leave="transition duration-75 ease-in" leave-from="opacity-100 scale-100"
-            leave-to="opacity-0 scale-95"
-          >
+          <Teleport to="body">
             <MenuItems
-              class="absolute left-0 z-10 mt-1 w-32 origin-top-left rounded border border-gray-300 bg-white py-1 shadow-md focus:outline-none dark:border-gray-700 dark:bg-gray-800"
+              class="w-32 overflow-y-auto rounded border border-gray-300 bg-white py-1 shadow-md focus:outline-none dark:border-gray-700 dark:bg-gray-800"
+              :style="menuPosition('left')"
             >
               <MenuItem v-slot="{ active }">
                 <button
@@ -148,7 +149,7 @@ watch(() => props.dragItemGuid, (v) => {
                 </button>
               </MenuItem>
             </MenuItems>
-          </TransitionRoot>
+          </Teleport>
         </Menu>
       </div>
     </TransitionGroup>

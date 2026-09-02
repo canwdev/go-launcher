@@ -19,7 +19,7 @@ export function formatRuntime(ms: number): string {
     if (s > 0)
       parts.push(`1m`)
     else
-      parts.push('.')
+      parts.push('--')
   }
   return parts.join(' ')
 }
