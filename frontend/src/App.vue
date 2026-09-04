@@ -2,17 +2,18 @@
 import type { AppItem } from './api'
 import type { MenuEntry } from './composables/itemMenu'
 import type { Theme } from './composables/useTheme'
-import { Ellipsis, ExternalLink, FilePlus2, FolderOpen, Gamepad2, Images, LayoutGrid, List, Moon, Plus, RefreshCw, Sun, SunMoon } from '@lucide/vue'
+import { Ellipsis, ExternalLink, FilePlus2, FolderOpen, Gamepad2, Images, LayoutGrid, List, Moon, Plus, RefreshCw, Search, Sun, SunMoon } from '@lucide/vue'
 import { useStorage } from '@vueuse/core'
-import { computed, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { BrowserOpenURL } from '../wailsjs/runtime/runtime'
-import { OpenDirectory } from './api'
+import { Launch, Open, OpenDirectory } from './api'
 import AppDialog from './components/AppDialog.vue'
 import GridItem from './components/GridItem.vue'
 import ItemEditDialog from './components/ItemEditDialog.vue'
 import ItemMenu from './components/ItemMenu.vue'
 import LauncherRow from './components/LauncherRow.vue'
 import RuntimeEditDialog from './components/RuntimeEditDialog.vue'
+import SearchOverlay from './components/SearchOverlay.vue'
 import TabBar from './components/TabBar.vue'
 import { useAutoRuntime } from './composables/useAutoRuntime'
 import { useConfirmDialog } from './composables/useConfirmDialog'
@@ -31,6 +32,24 @@ const timer = useManualTimer()
 
 // 视图模式：list（列表） / grid（网格）。UI 偏好，走 localStorage。
 const viewMode = useStorage<'list' | 'grid'>('launcher-view-mode', 'list')
+const searchOpen = ref(false)
+const searchOnLaunch = (guid: string, tabGuid: string) => {
+  setActiveTab(tabGuid)
+  const p = timer.isAutoTimer(guid) ? Open(guid) : Launch(guid)
+  p.catch(showError)
+}
+
+// Ctrl+F 打开搜索（仅应用内生效，非系统全局热键）
+function onGlobalKeydown(e: KeyboardEvent) {
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'f') {
+    e.preventDefault()
+    if (!searchOpen.value)
+      searchOpen.value = true
+  }
+}
+
+onMounted(() => window.addEventListener('keydown', onGlobalKeydown))
+onUnmounted(() => window.removeEventListener('keydown', onGlobalKeydown))
 function toggleViewMode() {
   viewMode.value = viewMode.value === 'grid' ? 'list' : 'grid'
 }
@@ -424,6 +443,13 @@ function onAddFiles() {
           <component :is="viewMode === 'grid' ? List : LayoutGrid" class="h-4 w-4" />
         </button>
 
+        <button
+          class="flex h-6 w-6 shrink-0 items-center justify-center rounded text-gray-500 hover:bg-gray-200 dark:text-gray-300 dark:hover:bg-gray-700"
+          title="Search" @click="searchOpen = true"
+        >
+          <Search class="h-4 w-4" />
+        </button>
+
         <ItemMenu :entries="appMenuItems" :estimate="260" width-class="w-56" button-class="flex h-6 w-6 shrink-0 items-center justify-center rounded text-gray-500 hover:bg-gray-200 dark:text-gray-300 dark:hover:bg-gray-700">
           <template #button>
             <Ellipsis class="h-4 w-4" />
@@ -561,6 +587,7 @@ function onAddFiles() {
       </TransitionGroup>
     </div>
   </div>
+  <SearchOverlay v-model:open="searchOpen" :store="store" :state="state" :on-launch="searchOnLaunch" />
 </template>
 
 <style scoped>

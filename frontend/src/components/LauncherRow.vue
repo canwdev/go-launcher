@@ -113,7 +113,7 @@ function onContextMenu(e: MouseEvent) {
 <template>
   <div
     draggable="true"
-    class="flex select-none items-center gap-2.5 rounded px-2.5 py-1.5 transition-colors duration-150 hover:bg-gray-200/70 dark:hover:bg-gray-800"
+    class="flex select-none items-center gap-2.5 rounded px-2.5 py-1.5 transition-colors duration-150 hover:bg-gray-200/50 dark:hover:bg-gray-800"
     :class="{
       'opacity-40': dragging,
       'ring-2 ring-blue-400': dragOver,

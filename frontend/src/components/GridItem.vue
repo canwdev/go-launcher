@@ -1,6 +1,6 @@
 ﻿<script setup lang="ts">
 import type { AppItem } from '../api'
-import { Ellipsis, Plus } from '@lucide/vue'
+import { Ellipsis } from '@lucide/vue'
 import { computed, ref } from 'vue'
 import { ConvertItemToAbsolute, ConvertItemToRelative, Reveal, UpdateIcon } from '../api'
 import { buildItemMenu, buildSlotMenu } from '../composables/itemMenu'
@@ -148,7 +148,7 @@ function onDragEnd() {
   <!-- item 卡片 -->
   <div
     v-if="item" draggable="true"
-    class="group relative flex aspect-square select-none flex-col items-center justify-center rounded-lg p-2 pt-4 transition-colors duration-150 hover:bg-gray-200/70 dark:hover:bg-gray-800"
+    class="group relative flex aspect-square select-none flex-col items-center justify-center rounded-lg p-2 pt-4 transition-colors duration-150 hover:bg-gray-200/50 dark:hover:bg-gray-800"
     :class="{
       'opacity-40': dragging,
       'ring-2 ring-blue-400': dragOver,
@@ -195,7 +195,7 @@ function onDragEnd() {
   <!-- 空槽 -->
   <div
     v-else
-    class="group relative flex aspect-square select-none flex-col items-center justify-center rounded-lg border-2 border-dashed border-gray-300 text-gray-400 dark:border-gray-600 dark:text-gray-500"
+    class="group relative flex aspect-square select-none flex-col items-center justify-center rounded-lg  text-gray-400 dark:border-gray-600 dark:text-gray-500"
     :class="{ 'ring-2 ring-blue-400': dragOver, 'border-green-400 dark:border-green-500': dragCopy && dragOver }"
     draggable="true"
     @dragstart="onDragStart"
@@ -211,6 +211,5 @@ function onDragEnd() {
         </template>
       </ItemMenu>
     </div>
-    <Plus class="h-5 w-5" />
   </div>
 </template>
