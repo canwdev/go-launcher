@@ -10,6 +10,10 @@ export interface MenuEntry {
   /** 条件显示；false 或 undefined 表示显示（show === false 才隐藏） */
   show?: boolean
   action?: () => void
+  /** 勾选态开关项：true 时渲染右侧 Check 图标 */
+  toggle?: boolean
+  /** 勾选态判断（toggle 项） */
+  checked?: () => boolean
 }
 
 export interface ItemMenuCallbacks {

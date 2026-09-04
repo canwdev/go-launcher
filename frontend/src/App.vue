@@ -1,9 +1,8 @@
 ﻿<script setup lang="ts">
-import type { Component } from 'vue'
 import type { AppItem } from './api'
+import type { MenuEntry } from './composables/itemMenu'
 import type { Theme } from './composables/useTheme'
-import { Menu, MenuButton, MenuItem, MenuItems } from '@headlessui/vue'
-import { Check, Ellipsis, FolderOpen, Gamepad2, Images, LayoutGrid, List, Moon, Plus, RefreshCw, Sun, SunMoon } from '@lucide/vue'
+import { Ellipsis, FolderOpen, Gamepad2, Images, LayoutGrid, List, Moon, Plus, RefreshCw, Sun, SunMoon } from '@lucide/vue'
 import { useStorage } from '@vueuse/core'
 import { computed, ref } from 'vue'
 import { OpenDirectory } from './api'
@@ -11,12 +10,12 @@ import AppDialog from './components/AppDialog.vue'
 import GridItem from './components/GridItem.vue'
 import ItemEditDialog from './components/ItemEditDialog.vue'
 import LauncherRow from './components/LauncherRow.vue'
+import ItemMenu from './components/ItemMenu.vue'
 import RuntimeEditDialog from './components/RuntimeEditDialog.vue'
 import TabBar from './components/TabBar.vue'
 import { useAutoRuntime } from './composables/useAutoRuntime'
 import { useConfirmDialog } from './composables/useConfirmDialog'
 import { useManualTimer } from './composables/useManualTimer'
-import { useMenuFlip } from './composables/useMenuFlip'
 import { useModalDialog } from './composables/useModalDialog'
 import { useStore } from './composables/useStore'
 import { useTheme } from './composables/useTheme'
@@ -125,7 +124,6 @@ function cycleTheme() {
   setTheme(themeSequence[(idx + 1) % themeSequence.length])
 }
 
-interface MenuEntry { key: string, divider?: boolean, toggle?: boolean, label?: string, checked?: () => boolean, onClick?: () => void, icon?: Component }
 const appMenuItems: MenuEntry[] = [
   {
     key: 'game-mode',
@@ -133,49 +131,47 @@ const appMenuItems: MenuEntry[] = [
     icon: Gamepad2,
     label: 'Game mode',
     checked: () => store.value.settings.game_mode,
-    onClick: () => setGameMode(!store.value.settings.game_mode),
+    action: () => setGameMode(!store.value.settings.game_mode),
   },
   {
     key: 'absolute-paths',
     toggle: true,
     label: 'Abs path for new items',
     checked: () => store.value.settings.absolute_paths,
-    onClick: () => setAbsolutePaths(!store.value.settings.absolute_paths),
+    action: () => setAbsolutePaths(!store.value.settings.absolute_paths),
   },
   { key: 'divider-2', divider: true },
   {
     key: 'refresh',
     icon: RefreshCw,
     label: 'Refresh',
-    onClick: onRefresh,
+    action: onRefresh,
   },
   {
     key: 'open-dir',
     icon: FolderOpen,
     label: 'Open program directory...',
-    onClick: onOpenProgramDir,
+    action: onOpenProgramDir,
   },
   { key: 'divider-1', divider: true },
   {
     key: 'to-absolute',
     label: 'Convert to absolute path',
-    onClick: () => convertToAbsolute(),
+    action: () => convertToAbsolute(),
   },
   {
     key: 'to-relative',
     label: 'Convert to relative path',
-    onClick: () => convertToRelative(),
+    action: () => convertToRelative(),
   },
   {
     key: 'batch-icons',
     icon: Images,
     label: 'Batch update icons',
-    onClick: onBatchUpdateIcons,
+    action: onBatchUpdateIcons,
   },
 ]
 
-// Flip the main menu upward when there is not enough room below the button.
-const { onMenuButtonClick, menuPosition } = useMenuFlip({ estimate: 260 })
 
 const draggingIndex = ref<number | null>(null)
 const dragFromIndex = ref<number | null>(null)
@@ -399,36 +395,11 @@ function onAddFiles() {
           <component :is="viewMode === 'grid' ? List : LayoutGrid" class="h-4 w-4" />
         </button>
 
-        <Menu as="div" class="relative">
-          <MenuButton
-            class="flex h-6 w-6 shrink-0 items-center justify-center rounded text-gray-500 hover:bg-gray-200 dark:text-gray-300 dark:hover:bg-gray-700"
-            title="Menu" @click="onMenuButtonClick"
-          >
+        <ItemMenu :entries="appMenuItems" :estimate="260" width-class="w-56" button-class="flex h-6 w-6 shrink-0 items-center justify-center rounded text-gray-500 hover:bg-gray-200 dark:text-gray-300 dark:hover:bg-gray-700">
+          <template #button>
             <Ellipsis class="h-4 w-4" />
-          </MenuButton>
-          <Teleport to="body">
-            <MenuItems
-              class="w-56 overflow-y-auto rounded border border-gray-300 bg-white py-1 shadow-md focus:outline-none dark:border-gray-700 dark:bg-gray-800"
-              :style="menuPosition('right')"
-            >
-              <template v-for="item in appMenuItems" :key="item.key">
-                <div v-if="item.divider" class="my-1 border-t border-gray-200 dark:border-gray-700" />
-                <MenuItem v-else v-slot="{ active }">
-                  <button
-                    class="flex w-full items-center gap-2 px-3 py-1.5 text-left"
-                    :class="active ? 'bg-gray-100 dark:bg-gray-700' : ''" @click="item.onClick?.()"
-                  >
-                    <span v-if="item.icon" class="inline-flex h-4 w-4 shrink-0 items-center justify-center text-gray-500 dark:text-gray-400">
-                      <component :is="item.icon" class="h-4 w-4" />
-                    </span>
-                    <span class="min-w-0 flex-1 truncate">{{ item.label }}</span>
-                    <Check v-if="item.toggle && item.checked?.()" class="h-4 w-4 shrink-0 text-blue-500" />
-                  </button>
-                </MenuItem>
-              </template>
-            </MenuItems>
-          </Teleport>
-        </Menu>
+          </template>
+        </ItemMenu>
       </div>
     </TabBar>
 

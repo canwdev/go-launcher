@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { MenuEntry } from '../composables/itemMenu'
 import { Menu, MenuButton, MenuItem, MenuItems } from '@headlessui/vue'
+import { Check } from '@lucide/vue'
 import { ref } from 'vue'
 import { useMenuFlip } from '../composables/useMenuFlip'
 
@@ -10,11 +11,14 @@ const props = withDefaults(defineProps<{
   estimate?: number
   align?: 'left' | 'right'
   widthClass?: string
+  /** 覆盖触发按钮的默认样式 */
+  buttonClass?: string
 }>(), {
   disabled: false,
   estimate: 260,
   align: 'right',
   widthClass: 'w-54',
+  buttonClass: 'rounded p-1 text-gray-500 hover:bg-gray-200 dark:text-gray-300 dark:hover:bg-gray-700',
 })
 
 const { onMenuButtonClick, onMenuOpenAt, menuPosition } = useMenuFlip({ estimate: props.estimate })
@@ -49,8 +53,10 @@ defineExpose({ open })
   <Menu v-slot="{ open }" as="div" class="relative">
     <div ref="btnWrapRef" data-item-menu-btn class="inline-block">
       <MenuButton
-        class="rounded p-1 text-gray-500 hover:bg-gray-200 dark:text-gray-300 dark:hover:bg-gray-700"
-        :class="disabled ? 'cursor-not-allowed opacity-50 disabled:hover:bg-transparent dark:disabled:hover:bg-transparent' : ''"
+        :class="[
+          buttonClass,
+          disabled ? 'cursor-not-allowed opacity-50 disabled:hover:bg-transparent dark:disabled:hover:bg-transparent' : '',
+        ]"
         :disabled="disabled"
         @click.stop="onBtnClick"
       >
@@ -80,6 +86,7 @@ defineExpose({ open })
                 <component :is="entry.icon" class="h-4 w-4" />
               </span>
               <span class="min-w-0 flex-1 truncate">{{ entry.label }}</span>
+              <Check v-if="entry.toggle && entry.checked?.()" class="h-4 w-4 shrink-0 text-blue-500" />
             </button>
           </MenuItem>
         </template>

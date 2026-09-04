@@ -1,9 +1,9 @@
-<script setup lang="ts">
+﻿<script setup lang="ts">
 import type { Category } from '../composables/useStore'
-import { Menu, MenuButton, MenuItem, MenuItems } from '@headlessui/vue'
+import type { MenuEntry } from '../composables/itemMenu'
 import { Ellipsis, PencilLine, Plus, Trash2 } from '@lucide/vue'
 import { ref, watch } from 'vue'
-import { useMenuFlip } from '../composables/useMenuFlip'
+import ItemMenu from './ItemMenu.vue'
 
 const props = defineProps<{
   tabs: Category[]
@@ -32,8 +32,13 @@ const overIndex = ref<number | null>(null)
 const itemOverIndex = ref<number | null>(null)
 const itemCopy = ref(false)
 
-// Flip the tab menu upward when there is not enough room below.
-const { onMenuButtonClick, menuPosition } = useMenuFlip({ estimate: 100 })
+
+function tabMenuEntries(tab: Category): MenuEntry[] {
+  return [
+    { key: 'rename', icon: PencilLine, label: 'Rename', action: () => emit('rename', tab.guid, tab.name) },
+    { key: 'delete', icon: Trash2, label: 'Delete', danger: true, action: () => emit('remove', tab.guid, tab.name) },
+  ]
+}
 
 function onDragStart(index: number) {
   fromIndex.value = index
@@ -118,39 +123,11 @@ watch(() => props.dragItemGuid, (v) => {
           class="pointer-events-none absolute -right-1.5 -top-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-green-500 text-[11px] font-bold leading-none text-white ring-2 ring-white dark:ring-gray-800"
         >+</span>
 
-        <Menu as="div" class="relative">
-          <MenuButton
-            class="flex h-4 w-4 items-center justify-center rounded text-xs opacity-0 hover:bg-white/20 group-hover:opacity-100"
-            @click.stop="onMenuButtonClick"
-          >
+        <ItemMenu :entries="tabMenuEntries(tab)" :estimate="100" align="left" width-class="w-32" button-class="flex h-4 w-4 items-center justify-center rounded text-xs opacity-0 hover:bg-white/20 group-hover:opacity-100">
+          <template #button>
             <Ellipsis class="h-3 w-3" />
-          </MenuButton>
-          <Teleport to="body">
-            <MenuItems
-              class="w-32 overflow-y-auto rounded border border-gray-300 bg-white py-1 shadow-md focus:outline-none dark:border-gray-700 dark:bg-gray-800"
-              :style="menuPosition('left')"
-            >
-              <MenuItem v-slot="{ active }">
-                <button
-                  class="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm text-gray-700 dark:text-gray-200"
-                  :class="active ? 'bg-gray-100 dark:bg-gray-700' : ''" @click="emit('rename', tab.guid, tab.name)"
-                >
-                  <PencilLine class="h-4 w-4 shrink-0 text-gray-400 dark:text-gray-500" />
-                  <span>Rename</span>
-                </button>
-              </MenuItem>
-              <MenuItem v-slot="{ active }">
-                <button
-                  class="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm text-red-600 dark:text-red-400"
-                  :class="active ? 'bg-gray-100 dark:bg-gray-700' : ''" @click="emit('remove', tab.guid, tab.name)"
-                >
-                  <Trash2 class="h-4 w-4 shrink-0" />
-                  <span>Delete</span>
-                </button>
-              </MenuItem>
-            </MenuItems>
-          </Teleport>
-        </Menu>
+          </template>
+        </ItemMenu>
       </div>
     </TransitionGroup>
 
