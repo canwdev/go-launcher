@@ -1,4 +1,4 @@
-import { Clock, Timer } from '@lucide/vue'
+﻿import { Clock, Timer } from '@lucide/vue'
 import { useTimeoutFn } from '@vueuse/core'
 import { computed, ref } from 'vue'
 import { Launch, Open, Stop } from '../api'
@@ -7,11 +7,12 @@ import { formatRuntime, showError } from '../utils'
 export interface ItemLaunchState {
   item: { guid: string }
   running: boolean
-  /** 展示用 runtime ms（已含 live 计算 / autoTimer baseline 处理） */
-  runtimeMs: number
+  /** 累计展示用时 baseline ms（不含本次会话增量；autoTimer 项同样为 baseline） */
+  baselineMs: number
+  /** 本次会话计时增量 ms（手动计时 elapsed 或自动计时 live 增量）；0=未计时 */
+  liveMs: number
   gameMode: boolean
   timerActive: boolean
-  timerMinutes: string
   autoTimer: boolean
 }
 
@@ -43,7 +44,13 @@ export function useItemActions(
     launchCooling.value = false
   }, LAUNCH_COOLDOWN_MS, { immediate: false })
 
-  const runtimeText = computed(() => formatRuntime(o.value.runtimeMs))
+  const runtimeText = computed(() => {
+    const base = formatRuntime(o.value.baselineMs)
+    // Manual / Auto 计时统一为 "Xm (+ Xm)" 字符串（无图标）：
+    if (o.value.liveMs > 0)
+      return `${base} (+ ${formatRuntime(o.value.liveMs)})`
+    return base
+  })
   const runtimeIcon = computed(() => (o.value.autoTimer ? Timer : Clock))
 
   async function onRun() {

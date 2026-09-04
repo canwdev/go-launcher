@@ -1,4 +1,4 @@
-<script setup lang="ts">
+﻿<script setup lang="ts">
 import type { AppItem } from '../api'
 import { Ellipsis, Plus } from '@lucide/vue'
 import { computed } from 'vue'
@@ -13,10 +13,10 @@ const props = defineProps<{
   slotIndex: number
   iconUrl?: string
   running?: boolean
-  runtimeMs?: number
+  baselineMs?: number
   gameMode?: boolean
   timerActive?: boolean
-  timerMinutes?: string
+  liveMs?: number
   autoTimer?: boolean
   dragging?: boolean
   dragOver?: boolean
@@ -60,10 +60,10 @@ const { runtimeText, runtimeIcon, onRun, onClick } = useItemActions(
   () => ({
     item: props.item ?? { guid: '' },
     running: props.running ?? false,
-    runtimeMs: props.runtimeMs ?? 0,
+    baselineMs: props.baselineMs ?? 0,
     gameMode: props.gameMode ?? false,
     timerActive: props.timerActive ?? false,
-    timerMinutes: props.timerMinutes ?? '--',
+    liveMs: props.liveMs ?? 0,
     autoTimer: props.autoTimer ?? false,
   }),
   {
@@ -153,7 +153,7 @@ function onDragEnd() {
         : (running ? 'text-gray-500 dark:text-gray-400' : 'text-gray-500 hover:text-blue-600 dark:text-gray-400 dark:hover:text-blue-500')"
       :title="timerActive ? 'Click to stop timer and save' : (running ? 'Running' : 'Click to edit runtime')"
       @click.stop="onClick"
-    ><component :is="runtimeIcon" class="h-3 w-3 shrink-0" /><span class="truncate">{{ runtimeText }}</span><template v-if="timerActive">(<Plus class="h-3 w-3" />{{ timerMinutes }})</template></span>
+    ><component :is="runtimeIcon" class="h-3 w-3 shrink-0" /><span class="truncate">{{ runtimeText }}</span></span>
 
     <!-- 右上角 hover 菜单 -->
     <div class="absolute right-1 top-1 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">

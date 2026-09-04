@@ -1,6 +1,6 @@
-<script setup lang="ts">
+﻿<script setup lang="ts">
 import type { AppItem } from '../api'
-import { Ellipsis, Plus } from '@lucide/vue'
+import { Ellipsis } from '@lucide/vue'
 import { computed } from 'vue'
 import { ConvertItemToAbsolute, ConvertItemToRelative, Reveal, UpdateIcon } from '../api'
 import { buildItemMenu } from '../composables/itemMenu'
@@ -12,13 +12,13 @@ const props = defineProps<{
   item: AppItem
   iconUrl?: string
   running?: boolean
-  runtimeMs?: number
+  baselineMs?: number
   gameMode?: boolean
   dragging?: boolean
   dragOver?: boolean
   timerActive?: boolean
   /** 计时分钟展示串（如 1m / 2h 3m / --），由 App 层格式化 */
-  timerMinutes?: string
+  liveMs?: number
   /** 该 item 是否启用 autoTimer（启动后自动触发手动计时，不跟踪进程） */
   autoTimer?: boolean
 }>()
@@ -44,10 +44,10 @@ const { runtimeText, runtimeIcon, onRun, onClick } = useItemActions(
   () => ({
     item: props.item,
     running: props.running ?? false,
-    runtimeMs: props.runtimeMs ?? 0,
+    baselineMs: props.baselineMs ?? 0,
     gameMode: props.gameMode ?? false,
     timerActive: props.timerActive ?? false,
-    timerMinutes: props.timerMinutes ?? '--',
+    liveMs: props.liveMs ?? 0,
     autoTimer: props.autoTimer ?? false,
   }),
   {
@@ -124,7 +124,7 @@ function onDoubleClick(e: MouseEvent) {
         : (running ? 'cursor-not-allowed text-gray-500 dark:text-gray-400' : 'text-gray-500 hover:text-blue-600 hover:underline dark:text-gray-400 dark:hover:text-blue-400')"
       :title="timerActive ? 'Click to stop timer and save' : (running ? 'Running — stop the program to edit runtime' : 'Click to edit runtime')"
       @click="onClick"
-    ><component :is="runtimeIcon" class="h-3 w-3 shrink-0" />{{ runtimeText }}<template v-if="timerActive"> (<Plus class="h-3 w-3" />{{ timerMinutes }})</template></span>
+    ><component :is="runtimeIcon" class="h-3 w-3 shrink-0" />{{ runtimeText }}</span>
     <button
       class="rounded px-2.5 py-1"
       :class="running ? 'bg-red-500 text-white hover:bg-red-600' : 'text-gray-700 hover:bg-gray-200 dark:text-gray-100 dark:hover:bg-gray-700'"

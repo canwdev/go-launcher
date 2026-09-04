@@ -1,4 +1,4 @@
-<script setup lang="ts">
+﻿<script setup lang="ts">
 import type { Component } from 'vue'
 import type { AppItem } from './api'
 import type { Theme } from './composables/useTheme'
@@ -21,7 +21,7 @@ import { useModalDialog } from './composables/useModalDialog'
 import { useStore } from './composables/useStore'
 import { useTheme } from './composables/useTheme'
 import { useToast } from './composables/useToast'
-import { formatRuntime, showError } from './utils'
+import { showError } from './utils'
 
 const { activeTab, state, store, addFilesInto, addTab, renameItem, removeItem, setActiveTab, moveTab, renameTab, removeTab, updateItemIcon, updateItem, batchUpdateIcons, save, refresh, setGameMode, setRuntimeMs, setAbsolutePaths, convertToAbsolute, convertToRelative, duplicateItem, moveItemToTab, copyItemToTab, insertEmptyAt, deleteSlotAt, reorderSlots } = useStore()
 const { theme, setTheme } = useTheme()
@@ -97,20 +97,23 @@ function onInsertEmptyByGuid(guid: string) {
   if (idx >= 0)
     insertEmptyAt(idx).catch(showError)
 }
-// 指定 item 手动计时的显示文案（多计时并行，按 guid 计算；elapsedMs 每 30s 刷新）。
-// 内容展示复用 formatRuntime，保证与运行时长的格式化口径一致。
-function timerMinutes(guid: string) {
-  return formatRuntime(timer.elapsedMs(guid))
+
+// 该 item 应展示的累计用时 baseline（ms），不含本次会话增量。
+// autoTimer 项不触发自动计时：启动后增量完全走手动计时。
+function rowBaselineMs(guid: string): number {
+  const st = state.value[guid]
+  return st?.runtime_ms ?? store.value.apps[guid]?.runtime_ms ?? 0
 }
 
-// 该 item 应展示的 runtime（ms）。autoTimer 项不触发自动计时：只显示 baseline，
-// 不叠加进程运行增量；运行/时长完全走手动计时。
-function rowRuntimeMs(guid: string): number {
+// 本次会话计时增量（ms）：autoTimer 项=手动计时 elapsed；普通项=自动计时 live 增量。
+// 显示为 "Xm (+ Xm)" 的括号部分；未计时返回 0。
+function rowLiveMs(guid: string): number {
+  if (timer.isAutoTimer(guid))
+    return timer.elapsedMs(guid)
   const st = state.value[guid]
   const baseline = st?.runtime_ms ?? store.value.apps[guid]?.runtime_ms ?? 0
-  if (timer.isAutoTimer(guid))
-    return baseline
-  return autoRuntime.liveMs(baseline, st?.running ?? false, st?.start_at ?? 0)
+  const live = autoRuntime.liveMs(baseline, st?.running ?? false, st?.start_at ?? 0)
+  return live > baseline ? live - baseline : 0
 }
 
 const themeSequence: Theme[] = ['auto', 'light', 'dark']
@@ -444,10 +447,10 @@ function onAddFiles() {
             <LauncherRow
               v-for="(row, index) in rows" :key="row.item.guid" :item="row.item"
               :icon-url="state[row.item.guid]?.icon_url ?? ''" :running="state[row.item.guid]?.running ?? false"
-              :runtime-ms="rowRuntimeMs(row.item.guid)" :dragging="draggingIndex === index"
+              :baseline-ms="rowBaselineMs(row.item.guid)" :live-ms="rowLiveMs(row.item.guid)" :dragging="draggingIndex === index"
               :drag-over="dragOverIndex === index && draggingIndex !== null && dragOverIndex !== draggingIndex"
               :game-mode="store.settings.game_mode"
-              :timer-active="timer.isActive(row.item.guid)" :timer-minutes="timerMinutes(row.item.guid)"
+              :timer-active="timer.isActive(row.item.guid)" :timer-ms="timer.elapsedMs(row.item.guid)"
               :auto-timer="timer.isAutoTimer(row.item.guid)"
               @rename="openItemRename(row.item)" @details="openItemEdit(row.item)" @duplicate="duplicateItem(row.item.guid)" @delete="onDeleteRequested(row.item)"
               @refresh="refresh" @icondone="(icon, iconUrl) => onIconDone(icon, iconUrl, row.item)"
@@ -465,10 +468,10 @@ function onAddFiles() {
               :item="gridItem(slot)" :slot-index="i"
               :icon-url="slot ? state[slot]?.icon_url ?? '' : ''"
               :running="slot ? state[slot]?.running ?? false : false"
-              :runtime-ms="slot ? rowRuntimeMs(slot) : 0"
+              :baseline-ms="slot ? rowBaselineMs(slot) : 0" :live-ms="slot ? rowLiveMs(slot) : 0"
               :game-mode="store.settings.game_mode"
               :timer-active="slot ? timer.isActive(slot) : false"
-              :timer-minutes="slot ? timerMinutes(slot) : '--'"
+              :timer-ms="slot ? timer.elapsedMs(slot) : 0"
               :auto-timer="slot ? timer.isAutoTimer(slot) : false"
               :dragging="gridDrag?.from === i"
               :drag-over="gridOver === i && gridDrag !== null && gridOver !== gridDrag.from"

@@ -1,25 +1,25 @@
-import { useStorage } from '@vueuse/core'
+﻿import { useStorage } from '@vueuse/core'
 import { onMounted, onUnmounted, ref } from 'vue'
 
 /**
  * 前端手动计时器（状态完全由前端维护，useStorage 响应式持久化到 localStorage）：
  * - start(guid)：开始为某个 item 计时；多 item 可并行计时，互不抢占
  * - stop(guid, onSave)：停止指定 item 的计时，把累计毫秒数交给 onSave 回调（由调用方写入后端）
- * - elapsedMs(guid)：指定 item 的累计毫秒数（每 30s 刷新一次，驱动 runtimeText 的 (+Xm) 显示）
+ * - elapsedMs(guid)：指定 item 的累计毫秒数（每 10s 刷新一次，驱动 runtimeText 的 (+Xm) 显示）
  * - isAutoTimer / setAutoTimer：每 item 的"启动后自动触发手动计时"开关（guid → boolean）
  */
 
 // 新 key：多计时并行格式（{ guid: startAt }）。旧单计时数据（launcher-manual-timer）不再兼容。
 const TIMERS_KEY = 'launcher-manual-timers'
 const AUTO_TIMER_KEY = 'launcher-auto-timer'
-const TICK_MS = 30_000
+const TICK_MS = 10_000
 
 export function useManualTimer() {
   // guid → startAt(ms)，多 item 可并行计时。
   // 默认值用对象（而非 null）→ useStorage 走 object serializer（JSON 读写），
   // 避免 null 默认值落到 'any' serializer 把对象 String 成 "[object Object]"。
   const timers = ref<Record<string, number>>({})
-  // 30s tick：仅用于驱动 elapsedMs 的响应式重算，显示分钟粒度足够。
+  // 10s tick：仅用于驱动 elapsedMs 的响应式重算，显示分钟粒度足够。
   const tick = ref(0)
   const persisted = useStorage<Record<string, number>>(TIMERS_KEY, {})
   const autoTimerEnabled = useStorage<Record<string, boolean>>(AUTO_TIMER_KEY, {})
@@ -50,7 +50,7 @@ export function useManualTimer() {
   }
 
   function elapsedMs(guid: string): number {
-    // 依赖 tick，使每 30s 刷新一次显示
+    // 依赖 tick，使每 10s 刷新一次显示
     void tick.value
     const s = timers.value[guid]
     return s ? Math.max(0, Date.now() - s) : 0
