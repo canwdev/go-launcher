@@ -6,10 +6,10 @@ import (
 	"fmt"
 	"image"
 	"image/color"
+	"runtime"
 	"syscall"
 	"unsafe"
 
-	"github.com/fcjr/geticon"
 	"golang.org/x/sys/windows"
 )
 
@@ -137,11 +137,7 @@ func readDIB(hbm windows.Handle, width, height int) ([]byte, error) {
 }
 
 func iconForFile(path string) (image.Image, error) {
-	img, err := geticon.FromPath(path)
-	if err == nil && img != nil {
-		return img, nil
-	}
-	img, err = shellIconLargeForFile(path)
+	img, err := shellIconLargeForFile(path)
 	if err == nil && img != nil {
 		return img, nil
 	}
@@ -201,6 +197,9 @@ func (f *shellItemImageFactory) release() {
 }
 
 func shellIconLargeForFile(path string) (image.Image, error) {
+	runtime.LockOSThread()
+	defer runtime.UnlockOSThread()
+
 	if err := procCoInitializeEx.Find(); err != nil {
 		return nil, err
 	}
@@ -221,7 +220,39 @@ func shellIconLargeForFile(path string) (image.Image, error) {
 	}
 	defer f.release()
 
-	hbm, err := f.getImage(maxIconSize)
+	return f.bestImage(maxIconSize)
+}
+
+func (f *shellItemImageFactory) bestImage(size int) (image.Image, error) {
+	base, err := f.fetchImage(size)
+	if err != nil {
+		return nil, err
+	}
+	cw, ch := nrgbaCore(base)
+	if size > 96 && cw > 0 && cw*ch*100 < 45*size*size {
+		probe, perr := f.fetchImage(96)
+		if perr == nil {
+			pw, ph := nrgbaCore(probe)
+			if pw >= cw*2/3 && ph >= ch*2/3 {
+				for _, sz := range []int{64, 48, 32} {
+					cand, cerr := f.fetchImage(sz)
+					if cerr != nil {
+						continue
+					}
+					kw, kh := nrgbaCore(cand)
+					if kw > 0 && kh > 0 && kw*kh*100 >= 45*sz*sz {
+						return cand, nil
+					}
+					base = cand
+				}
+			}
+		}
+	}
+	return base, nil
+}
+
+func (f *shellItemImageFactory) fetchImage(size int) (image.Image, error) {
+	hbm, err := f.getImage(size)
 	if err != nil {
 		return nil, err
 	}
@@ -254,6 +285,39 @@ func shellIconLargeForFile(path string) (image.Image, error) {
 		}
 	}
 	return img, nil
+}
+
+func nrgbaCore(img image.Image) (w, h int) {
+	n, ok := img.(*image.NRGBA)
+	if !ok {
+		return img.Bounds().Dx(), img.Bounds().Dy()
+	}
+	b := n.Rect
+	ww, hh := b.Dx(), b.Dy()
+	minX, minY, maxX, maxY := ww, hh, -1, -1
+	for y := 0; y < hh; y++ {
+		base := y * n.Stride
+		for x := 0; x < ww; x++ {
+			if n.Pix[base+x*4+3] >= 200 {
+				if x < minX {
+					minX = x
+				}
+				if x > maxX {
+					maxX = x
+				}
+				if y < minY {
+					minY = y
+				}
+				if y > maxY {
+					maxY = y
+				}
+			}
+		}
+	}
+	if maxX < minX || maxY < minY {
+		return ww, hh
+	}
+	return maxX - minX + 1, maxY - minY + 1
 }
 
 func shellIconForFile(path string) (image.Image, error) {
