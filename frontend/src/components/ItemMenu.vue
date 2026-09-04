@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { MenuEntry } from '../composables/itemMenu'
 import { Menu, MenuButton, MenuItem, MenuItems } from '@headlessui/vue'
+import { ref } from 'vue'
 import { useMenuFlip } from '../composables/useMenuFlip'
 
 const props = withDefaults(defineProps<{
@@ -16,20 +17,50 @@ const props = withDefaults(defineProps<{
   widthClass: 'w-54',
 })
 
-const { onMenuButtonClick, menuPosition } = useMenuFlip({ estimate: props.estimate })
+const { onMenuButtonClick, onMenuOpenAt, menuPosition } = useMenuFlip({ estimate: props.estimate })
+
+const btnWrapRef = ref<HTMLElement | null>(null)
+// 右键程序化打开时跳过按钮坐标覆盖（锚点已由鼠标位置设定）
+let skipButtonAnchor = false
+
+function onBtnClick(e: MouseEvent) {
+  if (skipButtonAnchor) {
+    skipButtonAnchor = false
+    return
+  }
+  onMenuButtonClick(e)
+}
+
+/** 以鼠标位置为锚点程序化打开菜单（供 item 右键调用）；不传事件则用按钮定位 */
+function open(e?: MouseEvent) {
+  if (props.disabled)
+    return
+  if (e) {
+    onMenuOpenAt(e)
+    skipButtonAnchor = true
+  }
+  btnWrapRef.value?.querySelector<HTMLButtonElement>('button')?.click()
+}
+
+defineExpose({ open })
 </script>
 
 <template>
-  <Menu as="div" class="relative">
-    <MenuButton
-      class="rounded p-1 text-gray-500 hover:bg-gray-200 dark:text-gray-300 dark:hover:bg-gray-700"
-      :class="disabled ? 'cursor-not-allowed opacity-50 disabled:hover:bg-transparent dark:disabled:hover:bg-transparent' : ''"
-      :disabled="disabled"
-      @click.stop="onMenuButtonClick"
-    >
-      <slot name="button" />
-    </MenuButton>
+  <Menu v-slot="{ open }" as="div" class="relative">
+    <div ref="btnWrapRef" data-item-menu-btn class="inline-block">
+      <MenuButton
+        class="rounded p-1 text-gray-500 hover:bg-gray-200 dark:text-gray-300 dark:hover:bg-gray-700"
+        :class="disabled ? 'cursor-not-allowed opacity-50 disabled:hover:bg-transparent dark:disabled:hover:bg-transparent' : ''"
+        :disabled="disabled"
+        @click.stop="onBtnClick"
+      >
+        <slot name="button" />
+      </MenuButton>
+    </div>
     <Teleport to="body">
+      <!-- 全屏透明遮罩：菜单打开期间，点击任意处仅关闭菜单，不触发 item 的点击执行。
+           遮罩是 body 直接子元素，点击事件不会冒泡到 item 卡片。 -->
+      <div v-if="open" class="fixed inset-0 z-40" @contextmenu.prevent />
       <MenuItems
         class="overflow-y-auto rounded border border-gray-300 bg-white py-1 shadow-md focus:outline-none dark:border-gray-700 dark:bg-gray-800" :class="[widthClass]"
         :style="menuPosition(align)"

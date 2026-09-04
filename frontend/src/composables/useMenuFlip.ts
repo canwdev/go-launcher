@@ -43,6 +43,19 @@ export function useMenuFlip(options: UseMenuFlipOptions = {}) {
   }
 
   /**
+   * 以鼠标点击位置（右键）为锚点定位菜单：anchor 落在鼠标处（视为 4×4 小按钮），
+   * 翻转判断基于鼠标 y 坐标，使右键弹出的菜单紧贴鼠标。
+   */
+  function onMenuOpenAt(e: MouseEvent) {
+    const x = e.clientX
+    const y = e.clientY
+    anchor.value = { x, y, w: 4, h: 4 }
+    const spaceBelow = window.innerHeight - y
+    const spaceAbove = y
+    menuUp.value = spaceBelow < estimate && spaceAbove > spaceBelow
+  }
+
+  /**
    * fixed 定位样式（菜单通过 Teleport 渲染在 body 上）：
    * 底边/顶边贴住按钮，水平方向按 align 对齐按钮左/右边缘。
    * 关键：max-height 动态限制为“按钮到对应视口边缘的可用空间”，
@@ -78,5 +91,5 @@ export function useMenuFlip(options: UseMenuFlipOptions = {}) {
     return pos
   }
 
-  return { menuUp, onMenuButtonClick, menuPosition }
+  return { menuUp, onMenuButtonClick, onMenuOpenAt, menuPosition }
 }

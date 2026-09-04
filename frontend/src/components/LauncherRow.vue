@@ -1,7 +1,7 @@
 ﻿<script setup lang="ts">
 import type { AppItem } from '../api'
 import { Ellipsis } from '@lucide/vue'
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { ConvertItemToAbsolute, ConvertItemToRelative, Reveal, UpdateIcon } from '../api'
 import { buildItemMenu } from '../composables/itemMenu'
 import { useItemActions } from '../composables/useItemActions'
@@ -99,6 +99,15 @@ function onDoubleClick(e: MouseEvent) {
     return
   onRun()
 }
+
+const itemMenuRef = ref<InstanceType<typeof ItemMenu> | null>(null)
+
+/** 右键弹出 item 菜单（以鼠标位置为锚点）；计时中禁用 */
+function onContextMenu(e: MouseEvent) {
+  if (props.timerActive)
+    return
+  itemMenuRef.value?.open(e)
+}
 </script>
 
 <template>
@@ -109,7 +118,7 @@ function onDoubleClick(e: MouseEvent) {
       'opacity-40': dragging,
       'ring-2 ring-blue-400': dragOver,
     }" @dblclick="onDoubleClick" @dragstart="emit('dragstart', $event)" @dragover.prevent="emit('dragover')"
-    @drop.prevent="emit('drop')" @dragend="emit('dragend')"
+    @drop.prevent="emit('drop')" @dragend="emit('dragend')" @contextmenu.prevent="onContextMenu"
   >
     <img
       v-if="iconUrl || item.icon || undefined" :src="iconUrl || item.icon || undefined" alt=""
@@ -134,7 +143,7 @@ function onDoubleClick(e: MouseEvent) {
       {{ running ? 'Stop' : 'Run' }}
     </button>
 
-    <ItemMenu :entries="menuEntries" :disabled="timerActive" :estimate="260">
+    <ItemMenu ref="itemMenuRef" :entries="menuEntries" :disabled="timerActive" :estimate="260">
       <template #button>
         <Ellipsis class="h-4 w-4" />
       </template>

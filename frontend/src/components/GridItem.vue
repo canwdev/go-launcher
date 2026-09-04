@@ -1,7 +1,7 @@
 ﻿<script setup lang="ts">
 import type { AppItem } from '../api'
 import { Ellipsis, Plus } from '@lucide/vue'
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { ConvertItemToAbsolute, ConvertItemToRelative, Reveal, UpdateIcon } from '../api'
 import { buildItemMenu, buildSlotMenu } from '../composables/itemMenu'
 import { useItemActions } from '../composables/useItemActions'
@@ -96,6 +96,22 @@ const menuEntries = computed(() => buildItemMenu({
   }),
 }, props.item ? isAutoIcon(props.item.icon) : false))
 
+const itemMenuRef = ref<InstanceType<typeof ItemMenu> | null>(null)
+
+/** 右键弹出 item 菜单（以鼠标位置为锚点）；计时中禁用 */
+function onContextMenu(e: MouseEvent) {
+  if (props.timerActive)
+    return
+  itemMenuRef.value?.open(e)
+}
+
+const slotMenuRef = ref<InstanceType<typeof ItemMenu> | null>(null)
+
+/** 空槽右键弹出空槽菜单（插入/删除空白） */
+function onSlotContextMenu(e: MouseEvent) {
+  slotMenuRef.value?.open(e)
+}
+
 const slotMenuEntries = computed(() => buildSlotMenu({
   onInsertEmpty: () => emit('insert-empty'),
   onDeleteEmpty: () => emit('delete-empty'),
@@ -142,7 +158,7 @@ function onDragEnd() {
     @dragstart="onDragStart"
     @dragover="onDragOver"
     @drop="onDrop"
-    @dragend="onDragEnd"
+    @dragend="onDragEnd" @contextmenu.prevent="onContextMenu"
   >
     <!-- 左上角运行时间 -->
     <span
@@ -157,7 +173,7 @@ function onDragEnd() {
 
     <!-- 右上角 hover 菜单 -->
     <div class="absolute right-1 top-1 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
-      <ItemMenu :entries="menuEntries" :disabled="timerActive" :estimate="340">
+      <ItemMenu ref="itemMenuRef" :entries="menuEntries" :disabled="timerActive" :estimate="340">
         <template #button>
           <Ellipsis class="h-4 w-4" />
         </template>
@@ -184,11 +200,11 @@ function onDragEnd() {
     @dragstart="onDragStart"
     @dragover="onDragOver"
     @drop="onDrop"
-    @dragend="onDragEnd"
+    @dragend="onDragEnd" @contextmenu.prevent="onSlotContextMenu"
   >
     <!-- 右上角 hover 菜单（空槽菜单：插入/删除空白） -->
     <div class="absolute right-1 top-1 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
-      <ItemMenu :entries="slotMenuEntries" :estimate="90">
+      <ItemMenu ref="slotMenuRef" :entries="slotMenuEntries" :estimate="90">
         <template #button>
           <Ellipsis class="h-4 w-4" />
         </template>
