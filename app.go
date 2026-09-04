@@ -1,4 +1,4 @@
-package main
+﻿package main
 
 import (
 	"context"
@@ -394,17 +394,18 @@ func (a *App) AddFiles() AddResult {
 		Title: "Add Files",
 	})
 	if err != nil {
-		return AddResult{}
+	\t// 用户取消 / 对话框异常：返回空数组，不当作错误抛给前端
+	\treturn AddResult{Items: []*AppItem{}, Icons: map[string]string{}}
 	}
 	if len(files) == 0 {
-		return AddResult{}
+	\treturn AddResult{Items: []*AppItem{}, Icons: map[string]string{}}
 	}
 	return a.AddPaths(files)
 }
 
 func (a *App) AddPaths(paths []string) AddResult {
 	if len(paths) == 0 {
-		return AddResult{}
+	\treturn AddResult{Items: []*AppItem{}, Icons: map[string]string{}}
 	}
 	a.mu.Lock()
 	defer a.mu.Unlock()
@@ -415,19 +416,36 @@ func (a *App) AddPaths(paths []string) AddResult {
 		if path == "" {
 			continue
 		}
-		icon := writeIcon(path)
-		storedPath := path
-		storedWorkDir := filepath.Dir(path)
+		name := defaultTitle(path)
+		target := path
+		args := ""
+		workDir := filepath.Dir(path)
+		iconPath := path
+		if isShortcutFile(path) {
+			if lnk, err := resolveShortcut(path); err == nil && lnk.Target != "" {
+				target = lnk.Target
+				args = lnk.Args
+				iconPath = target
+				workDir = lnk.WorkDir
+				if workDir == "" {
+					workDir = filepath.Dir(target)
+				}
+			}
+		}
+		icon := writeIcon(iconPath)
+		storedPath := target
+		storedWorkDir := workDir
 		if !a.store.Settings.AbsolutePaths {
-			storedPath = toStoredPath(path)
-			storedWorkDir = toStoredPath(storedWorkDir)
+			storedPath = toStoredPath(target)
+			storedWorkDir = toStoredPath(workDir)
 		}
 		item := &AppItem{
 			GUID:       uuid.NewString(),
-			Name:       defaultTitle(path),
+			Name:       name,
 			Path:       storedPath,
 			WorkingDir: storedWorkDir,
 			Icon:       icon,
+			Args:       args,
 		}
 		items = append(items, item)
 		icons[item.GUID] = a.iconURL(icon)

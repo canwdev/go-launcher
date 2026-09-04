@@ -34,6 +34,17 @@ func normalizePath(path string) string {
 	return p
 }
 
+// shortcutInfo holds the parsed contents of a Windows .lnk shortcut.
+type shortcutInfo struct {
+	Target  string // resolved program/file path
+	Args    string // launch arguments as stored in the shortcut
+	WorkDir string // startup ("start in") folder
+}
+
+func isShortcutFile(path string) bool {
+	return strings.EqualFold(filepath.Ext(path), ".lnk")
+}
+
 func defaultTitle(path string) string {
 	return strings.TrimSuffix(filepath.Base(path), filepath.Ext(path))
 }
