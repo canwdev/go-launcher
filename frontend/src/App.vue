@@ -2,9 +2,10 @@
 import type { AppItem } from './api'
 import type { MenuEntry } from './composables/itemMenu'
 import type { Theme } from './composables/useTheme'
-import { Ellipsis, FilePlus2, FolderOpen, Gamepad2, Images, LayoutGrid, List, Moon, Plus, RefreshCw, Sun, SunMoon } from '@lucide/vue'
+import { Ellipsis, ExternalLink, FilePlus2, FolderOpen, Gamepad2, Images, LayoutGrid, List, Moon, Plus, RefreshCw, Sun, SunMoon } from '@lucide/vue'
 import { useStorage } from '@vueuse/core'
 import { computed, ref } from 'vue'
+import { BrowserOpenURL } from '../wailsjs/runtime/runtime'
 import { OpenDirectory } from './api'
 import AppDialog from './components/AppDialog.vue'
 import GridItem from './components/GridItem.vue'
@@ -170,6 +171,13 @@ const appMenuItems: MenuEntry[] = [
     label: 'Batch update icons',
     action: onBatchUpdateIcons,
   },
+  { key: 'divider-3', divider: true },
+  {
+    key: 'github',
+    icon: ExternalLink,
+    label: `v${__APP_VERSION__} | GitHub`,
+    action: () => BrowserOpenURL('https://github.com/canwdev/go-launcher'),
+  },
 ]
 
 const draggingIndex = ref<number | null>(null)
@@ -288,6 +296,13 @@ function onDeleteRequested(item: AppItem) {
 }
 
 function onDeleteTabRequested(guid: string, name: string) {
+  const tab = store.value.categories.find(c => c.guid === guid)
+  const hasContent = tab?.slots.some(s => s != null) ?? false
+  // 空 tab 直接删除，无需确认
+  if (!hasContent) {
+    removeTab(guid).catch(showError)
+    return
+  }
   requestConfirm(`Delete tab "${name}"?`, () => removeTab(guid).catch(showError))
 }
 
@@ -417,7 +432,7 @@ function onAddFiles() {
       </div>
     </TabBar>
 
-    <main class="flex-1 overflow-y-auto p-2">
+    <main class="flex-1 overflow-y-auto">
       <Transition name="fade" mode="out-in">
         <div :key="activeTab?.guid ?? 'empty'" class="min-h-full">
           <div v-if="viewMode === 'list' && rows.length === 0" class="p-5 text-center text-gray-500 dark:text-gray-400">
@@ -447,7 +462,7 @@ function onAddFiles() {
           </TransitionGroup>
 
           <!-- 网格视图（含空槽；随窗口宽度自动变列数） -->
-          <div v-else class="grid gap-2 pb-1" style="grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));">
+          <div v-else class="grid gap-0" style="grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));">
             <GridItem
               v-for="(slot, i) in activeTab?.slots ?? []" :key="gridKey(slot, i)"
               :item="gridItem(slot)" :slot-index="i"

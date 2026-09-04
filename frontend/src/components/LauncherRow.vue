@@ -113,7 +113,7 @@ function onContextMenu(e: MouseEvent) {
 <template>
   <div
     draggable="true"
-    class="mb-1.5 flex select-none items-center gap-2.5 rounded border border-gray-300 bg-white px-2.5 py-1.5 dark:border-gray-700 dark:bg-gray-800"
+    class="flex select-none items-center gap-2.5 rounded px-2.5 py-1.5 transition-colors duration-150 hover:bg-gray-200/70 dark:hover:bg-gray-800"
     :class="{
       'opacity-40': dragging,
       'ring-2 ring-blue-400': dragOver,
@@ -131,7 +131,7 @@ function onContextMenu(e: MouseEvent) {
       :class="timerActive
         ? 'text-red-500 hover:text-red-600'
         : (running ? 'cursor-not-allowed text-gray-500 dark:text-gray-400' : 'text-gray-500 hover:text-blue-600 hover:underline dark:text-gray-400 dark:hover:text-blue-400')"
-      :title="timerActive ? 'Click to stop timer and save' : (running ? 'Running — stop the program to edit runtime' : 'Click to edit runtime')"
+      :title="`${runtimeText}\n${timerActive ? 'Click to stop timer and save' : (running ? 'Running — stop the program to edit runtime' : 'Click to edit runtime')}`"
       @click="onClick"
     ><component :is="runtimeIcon" class="h-3 w-3 shrink-0" />{{ runtimeText }}</span>
     <button

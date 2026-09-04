@@ -148,11 +148,11 @@ function onDragEnd() {
   <!-- item 卡片 -->
   <div
     v-if="item" draggable="true"
-    class="group relative flex select-none flex-col items-center rounded-lg border border-gray-300 bg-white p-2 pt-4 hover:border-blue-400 dark:border-gray-700 dark:bg-gray-800 dark:hover:border-blue-500"
+    class="group relative flex aspect-square select-none flex-col items-center justify-center rounded-lg p-2 pt-4 transition-colors duration-150 hover:bg-gray-200/70 dark:hover:bg-gray-800"
     :class="{
       'opacity-40': dragging,
       'ring-2 ring-blue-400': dragOver,
-      'border-red-500 hover:border-red-500 dark:border-red-500 dark:hover:border-red-500': running,
+      'bg-red-50 dark:bg-red-900/15': running,
     }"
     :title="item.name"
     @click="onRun"
@@ -168,7 +168,7 @@ function onDragEnd() {
       :class="timerActive
         ? 'text-red-500 hover:text-red-600'
         : (running ? 'text-gray-500 dark:text-gray-400' : 'text-gray-500 hover:text-blue-600 dark:text-gray-400 dark:hover:text-blue-500')"
-      :title="timerActive ? 'Click to stop timer and save' : (running ? 'Running' : 'Click to edit runtime')"
+      :title="`${runtimeText}\n${timerActive ? 'Click to stop timer and save' : (running ? 'Running' : 'Click to edit runtime')}`"
       @click.stop="onClick"
     ><component :is="runtimeIcon" class="h-3 w-3 shrink-0" /><span class="truncate">{{ runtimeText }}</span></span>
 
@@ -186,7 +186,7 @@ function onDragEnd() {
       v-if="iconUrl || item.icon" :src="iconUrl || item.icon" alt=""
       class="h-16 w-16 shrink-0 object-contain"
     >
-    <div v-else class="h-16 w-16 shrink-0 rounded bg-gray-100 dark:bg-gray-700" />
+    <div v-else class="h-16 w-16 shrink-0 rounded " />
 
     <!-- 标题 -->
     <span class="mt-1.5 w-full truncate text-center text-xs text-gray-700 dark:text-gray-200">{{ item.name }}</span>
@@ -195,7 +195,7 @@ function onDragEnd() {
   <!-- 空槽 -->
   <div
     v-else
-    class="group relative flex h-full min-h-24 select-none flex-col items-center justify-center rounded-lg border-2 border-dashed border-gray-300 text-gray-400 dark:border-gray-600 dark:text-gray-500"
+    class="group relative flex aspect-square select-none flex-col items-center justify-center rounded-lg border-2 border-dashed border-gray-300 text-gray-400 dark:border-gray-600 dark:text-gray-500"
     :class="{ 'ring-2 ring-blue-400': dragOver, 'border-green-400 dark:border-green-500': dragCopy && dragOver }"
     draggable="true"
     @dragstart="onDragStart"

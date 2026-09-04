@@ -1,6 +1,6 @@
 ﻿<script setup lang="ts">
-import type { Category } from '../composables/useStore'
 import type { MenuEntry } from '../composables/itemMenu'
+import type { Category } from '../composables/useStore'
 import { Ellipsis, PencilLine, Plus, Trash2 } from '@lucide/vue'
 import { ref, watch } from 'vue'
 import ItemMenu from './ItemMenu.vue'
@@ -31,7 +31,6 @@ const overIndex = ref<number | null>(null)
 // Item-over-tab drop targets (move by default, copy while Ctrl/Meta held).
 const itemOverIndex = ref<number | null>(null)
 const itemCopy = ref(false)
-
 
 function tabMenuEntries(tab: Category): MenuEntry[] {
   return [
@@ -101,43 +100,44 @@ watch(() => props.dragItemGuid, (v) => {
 
 <template>
   <div
-    class="flex items-center gap-1 border-b border-gray-300 bg-white px-2 py-1.5 dark:border-gray-700 dark:bg-gray-800"
+    class="flex items-center gap-4 border-b border-gray-300 bg-white px-2 py-1.5 dark:border-gray-700 dark:bg-gray-800"
   >
-    <TransitionGroup name="list" tag="div" class="flex items-center gap-1">
-      <div
-        v-for="(tab, index) in tabs" :key="tab.guid" :draggable="true"
-        class="group relative flex items-center gap-1 rounded px-2.5 py-1 select-none" :class="[
-          tab.guid === activeGuid
-            ? 'bg-blue-500 text-white'
-            : 'text-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-700',
-          dragIndex === index ? 'opacity-40' : '',
-          overIndex === index && dragIndex !== null && overIndex !== dragIndex ? 'ring-2 ring-blue-400' : '',
-          itemOverIndex === index && dragItemGuid ? (itemCopy ? 'ring-2 ring-green-500' : 'ring-2 ring-blue-400') : '',
-        ]" :title="itemOverIndex === index && dragItemGuid ? (itemCopy ? 'Drop to copy item to this tab' : 'Drop to move item to this tab') : ''"
-        @click="emit('select', tab.guid)" @dragstart="onDragStart(index)" @dragover="onDragOver($event, index)"
-        @drop="onDrop($event, index)" @dragend="onDragEnd"
-      >
-        <span class="text-sm">{{ tab.name }}</span>
-        <span
-          v-if="itemOverIndex === index && itemCopy && dragItemGuid"
-          class="pointer-events-none absolute -right-1.5 -top-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-green-500 text-[11px] font-bold leading-none text-white ring-2 ring-white dark:ring-gray-800"
-        >+</span>
+    <div class="flex min-w-0 items-center">
+      <TransitionGroup name="list" tag="div" class="flex min-w-0 flex-wrap items-center">
+        <div
+          v-for="(tab, index) in tabs" :key="tab.guid" :draggable="true"
+          class="group relative flex items-center gap-1 whitespace-nowrap rounded px-2.5 py-1 select-none" :class="[
+            tab.guid === activeGuid
+              ? 'bg-blue-500 text-white'
+              : 'text-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-700',
+            dragIndex === index ? 'opacity-40' : '',
+            overIndex === index && dragIndex !== null && overIndex !== dragIndex ? 'ring-2 ring-blue-400' : '',
+            itemOverIndex === index && dragItemGuid ? (itemCopy ? 'ring-2 ring-green-500' : 'ring-2 ring-blue-400') : '',
+          ]" :title="itemOverIndex === index && dragItemGuid ? (itemCopy ? 'Drop to copy item to this tab' : 'Drop to move item to this tab') : ''"
+          @click="emit('select', tab.guid)" @dragstart="onDragStart(index)" @dragover="onDragOver($event, index)"
+          @drop="onDrop($event, index)" @dragend="onDragEnd"
+        >
+          <span class="text-sm">{{ tab.name }}</span>
+          <span
+            v-if="itemOverIndex === index && itemCopy && dragItemGuid"
+            class="pointer-events-none absolute -right-1.5 -top-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-green-500 text-[11px] font-bold leading-none text-white ring-2 ring-white dark:ring-gray-800"
+          >+</span>
 
-        <ItemMenu :entries="tabMenuEntries(tab)" :estimate="100" align="left" width-class="w-32" button-class="flex h-4 w-4 items-center justify-center rounded text-xs opacity-0 hover:bg-white/20 group-hover:opacity-100">
-          <template #button>
-            <Ellipsis class="h-3 w-3" />
-          </template>
-        </ItemMenu>
-      </div>
-    </TransitionGroup>
-
-    <button
-      class="flex h-6 w-6 shrink-0 items-center justify-center rounded text-gray-500 hover:bg-gray-200 dark:text-gray-300 dark:hover:bg-gray-700"
-      title="Add Tab" @click="emit('add')"
-    >
-      <Plus class="h-4 w-4" />
-    </button>
-
+          <ItemMenu :entries="tabMenuEntries(tab)" :estimate="100" align="left" width-class="w-32" button-class="flex h-4 w-4 items-center justify-center rounded text-xs opacity-0 hover:bg-white/20 group-hover:opacity-100">
+            <template #button>
+              <Ellipsis class="h-3 w-3" />
+            </template>
+          </ItemMenu>
+        </div>
+          <button
+            key="add-tab"
+            class="flex h-6 w-6 shrink-0 items-center justify-center rounded text-gray-500 hover:bg-gray-200 dark:text-gray-300 dark:hover:bg-gray-700"
+            title="Add Tab" @click="emit('add')"
+          >
+            <Plus class="h-4 w-4" />
+          </button>
+      </TransitionGroup>
+    </div>
     <slot />
   </div>
 </template>
