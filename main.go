@@ -13,9 +13,12 @@ import (
 var assets embed.FS
 
 func main() {
-	// Single-instance guard: refuse to start a second copy of the launcher.
-	// Must run before wails.Run initialises the UI/backend.
-	if ok, err := acquireSingleton(); err != nil {
+	// Single-instance guard, scoped per install directory: a second copy from
+	// the same directory is refused (and focuses the existing window), while
+	// copies in different install directories may run simultaneously. Must run
+	// before wails.Run initialises the UI/backend.
+	key := installKey()
+	if ok, err := acquireSingleton(key); err != nil {
 		log.Fatalf("single-instance check failed: %v", err)
 	} else if !ok {
 		activateExistingInstance()
@@ -26,7 +29,7 @@ func main() {
 	app := NewApp()
 
 	err := wails.Run(&options.App{
-		Title:  "Go Launcher",
+		Title:  instanceTitle(installDir()),
 		Width:  640,
 		Height: 400,
 		AssetServer: &assetserver.Options{

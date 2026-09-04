@@ -10,20 +10,24 @@ import (
 	"syscall"
 )
 
-// singleInstanceLockName is the file name (inside the OS temp dir) used as an
-// advisory lock to enforce single-instance behaviour on non-Windows platforms.
-const singleInstanceLockName = ".go-launcher-singleton.lock"
+// singleInstanceLockPrefix is the file-name prefix (inside the OS temp dir)
+// used as an advisory lock to enforce single-instance behaviour on non-Windows
+// platforms. The full file name is this prefix plus the install-directory hash,
+// so different install directories get different lock files and can run
+// concurrently, while a second launch from the same directory is refused.
+const singleInstanceLockPrefix = ".go-launcher-singleton-"
 
 // instanceLock is the open lock file held for the lifetime of the process.
 var instanceLock *os.File
 
-// acquireSingleton claims the single-instance advisory lock via flock(). It
-// returns true when this process is the only running copy, and false when
-// another copy already holds the lock. The lock is released automatically when
-// the process exits (the kernel drops flock locks on fd close / process exit),
-// so a crashed instance never leaves a stale lock behind.
-func acquireSingleton() (bool, error) {
-	path := filepath.Join(os.TempDir(), singleInstanceLockName)
+// acquireSingleton claims the per-install-directory advisory lock via flock().
+// It returns true when this process is the only running copy for its install
+// directory, and false when another copy for the same directory already holds
+// the lock. The lock is released automatically when the process exits (the
+// kernel drops flock locks on fd close / process exit), so a crashed instance
+// never leaves a stale lock behind.
+func acquireSingleton(key string) (bool, error) {
+	path := filepath.Join(os.TempDir(), singleInstanceLockPrefix+key+".lock")
 	f, err := os.OpenFile(path, os.O_CREATE|os.O_RDWR, 0o644)
 	if err != nil {
 		return false, err

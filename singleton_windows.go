@@ -10,19 +10,16 @@ import (
 	"golang.org/x/sys/windows"
 )
 
-// singleInstanceMutexName is a fixed, globally known name used to detect
-// whether another copy of this application is already running. It must stay
-// stable across builds so different copies agree on the same object.
-const singleInstanceMutexName = "go-launcher-singleton"
-
-// wailsWindowClass is the Wails v2 main-window window class on Windows. It is
-// used to locate the already-running copy's window so a second launch can focus
-// it instead of popping a dialog.
-const wailsWindowClass = "wailsWindow"
-
-// wailsWindowTitle matches options.App.Title in main.go; used as a fallback
-// when locating the running window.
-const wailsWindowTitle = "Go Launcher"
+// singleInstanceMutexPrefix is the name prefix (session-local namespace) for the
+// per-install-directory named mutex. The full name is this prefix plus the
+// install-directory hash, so different install directories get different
+// mutexes and can run concurrently, while a second launch from the same
+// directory is refused.
+//
+// The "Local\" prefix explicitly scopes the mutex to the current terminal
+// session: it needs no SeCreateGlobalPrivilege (unlike "Global\") and lets two
+// different user sessions run their own copies of the same installation.
+const singleInstanceMutexPrefix = `Local\go-launcher-singleton-`
 
 // Win32 constants for window management (user32.h / winuser.h).
 const (
@@ -53,18 +50,21 @@ var (
 	procSetWindowPos  = user32Singleton.NewProc("SetWindowPos")
 )
 
-// acquireSingleton claims the single-instance named mutex. It returns true
-// when this process is the only running copy, and false when another copy
-// already owns the mutex (which must therefore be refused).
-func acquireSingleton() (bool, error) {
-	name, err := windows.UTF16PtrFromString(singleInstanceMutexName)
+// acquireSingleton claims the per-install-directory named mutex. It returns true
+// when this process is the only running copy for its install directory, and
+// false when another copy for the same directory already owns the mutex (which
+// must therefore be refused). Mutexes for different install directories do not
+// conflict, so those instances may run simultaneously.
+func acquireSingleton(key string) (bool, error) {
+	name, err := windows.UTF16PtrFromString(singleInstanceMutexPrefix + key)
 	if err != nil {
 		return false, err
 	}
 	h, err := windows.CreateMutex(nil, true, name)
 	if err != nil {
 		if errors.Is(err, windows.ERROR_ALREADY_EXISTS) {
-			// Another instance owns the mutex; close our handle to it.
+			// Another instance for the same directory owns the mutex; close our
+			// handle to it.
 			if h != 0 {
 				_ = windows.CloseHandle(h)
 			}
@@ -86,9 +86,9 @@ func releaseSingleton() {
 }
 
 // activateExistingInstance locates the main window of the already running copy
-// and brings it to the foreground, so a second launch focuses the existing app
-// instead of popping a dialog. The process then exits without starting a new
-// UI.
+// for the same install directory and brings it to the foreground, so a second
+// launch focuses the existing app instead of popping a dialog. The process then
+// exits without starting a new UI.
 func activateExistingInstance() {
 	hwnd := findMainWindow()
 	if hwnd == 0 {
@@ -104,22 +104,21 @@ func activateExistingInstance() {
 	procSetWindowPos.Call(hwnd, hwndNotTopmost, 0, 0, 0, 0, uintptr(swpNoMove|swpNoSize))
 }
 
-// findMainWindow returns the HWND of the running copy's main window. It first
-// looks it up by the Wails window class, then falls back to the window title.
+// findMainWindow returns the HWND of the running copy's main window for this
+// install directory.
+//
+// The window title is the full install directory (see instanceTitle), so with
+// several instances running concurrently the lookup targets exactly this
+// directory's window: full paths differ between install directories, and
+// FindWindowW's title comparison is case-insensitive, covering launches with
+// different path casing. The old class-based lookup is intentionally dropped:
+// all instances share the Wails window class, so it cannot distinguish install
+// directories.
 func findMainWindow() uintptr {
-	cls, err := windows.UTF16PtrFromString(wailsWindowClass)
-	if err == nil {
-		h, _, _ := procFindWindowW.Call(uintptr(unsafe.Pointer(cls)), 0)
-		if h != 0 {
-			return h
-		}
+	title, err := windows.UTF16PtrFromString(instanceTitle(installDir()))
+	if err != nil {
+		return 0
 	}
-	title, err := windows.UTF16PtrFromString(wailsWindowTitle)
-	if err == nil {
-		h, _, _ := procFindWindowW.Call(0, uintptr(unsafe.Pointer(title)))
-		if h != 0 {
-			return h
-		}
-	}
-	return 0
+	h, _, _ := procFindWindowW.Call(0, uintptr(unsafe.Pointer(title)))
+	return h
 }
