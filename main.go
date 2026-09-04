@@ -26,17 +26,33 @@ func main() {
 	}
 	defer releaseSingleton()
 
+	// Reopen the window at the size (and maximised state) it had when last
+	// closed (persisted by beforeClose); the first run falls back to the
+	// defaults. The saved position is applied separately in startup, because
+	// Wails always centres the window on creation.
+	ws := loadWindowState()
+	width, height := defaultWindowWidth, defaultWindowHeight
+	if ws.Width > 0 && ws.Height > 0 {
+		width, height = ws.Width, ws.Height
+	}
+	startState := options.Normal
+	if ws.Maximised {
+		startState = options.Maximised
+	}
+
 	app := NewApp()
 
 	err := wails.Run(&options.App{
-		Title:  instanceTitle(installDir()),
-		Width:  640,
-		Height: 400,
+		Title:            instanceTitle(installDir()),
+		Width:            width,
+		Height:           height,
+		WindowStartState: startState,
 		AssetServer: &assetserver.Options{
 			Assets: assets,
 		},
-		OnStartup:  app.startup,
-		OnShutdown: app.shutdown,
+		OnStartup:     app.startup,
+		OnBeforeClose: app.beforeClose,
+		OnShutdown:    app.shutdown,
 		Bind: []interface{}{
 			app,
 		},

@@ -1,4 +1,4 @@
-﻿package main
+package main
 
 import (
 	"context"
@@ -51,8 +51,8 @@ type AppStore struct {
 
 type ItemState struct {
 	Running   bool   `json:"running"`
-	RuntimeMs int64  `json:"runtime_ms"`           // persisted baseline (accumulated)
-	StartAt   int64  `json:"start_at,omitempty"`   // unix ms of process start, 0 when not running
+	RuntimeMs int64  `json:"runtime_ms"`         // persisted baseline (accumulated)
+	StartAt   int64  `json:"start_at,omitempty"` // unix ms of process start, 0 when not running
 	IconURL   string `json:"icon_url,omitempty"`
 }
 
@@ -277,6 +277,11 @@ func NewApp() *App {
 
 func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
+	// Restore the window position persisted at the previous close (see
+	// windowState). Size and maximised state are applied via the startup
+	// options; the position cannot be, because Wails centres the window on
+	// creation, so it is corrected here once the window exists.
+	applyRestoredWindowState(ctx)
 	// Frontend drives its own 30s display refresh (useAutoRuntime); the old
 	// backend 30s state tick was redundant and has been removed. State is still
 	// pushed on launch/stop/icon changes via emitState.
@@ -286,6 +291,15 @@ func (a *App) shutdown(_ context.Context) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	a.writeStore()
+}
+
+// beforeClose persists the current window size/maximised state (OnBeforeClose)
+// so the next launch can reopen at the same geometry. It runs while the window
+// still exists, which is required for the geometry snapshot. Always returns
+// false so the window closes normally.
+func (a *App) beforeClose(ctx context.Context) bool {
+	persistWindowState(ctx)
+	return false
 }
 
 func (a *App) emitState() {

@@ -80,7 +80,7 @@ export interface AddMenuCtx {
 /** TabBar 右侧「+」菜单（添加文件 / 新建） */
 export function buildAddMenu(ctx: AddMenuCtx): MenuEntry[] {
   return [
-    { key: 'pick', icon: FolderOpen, label: 'Pick files', action: ctx.onAddFiles },
+    { key: 'pick', icon: FolderOpen, label: 'Pick files...', action: ctx.onAddFiles },
     { key: 'create', icon: FilePlus2, label: 'Create...', action: ctx.onCreate },
   ]
 }
