@@ -10,6 +10,7 @@ import (
 	_ "image/jpeg"
 	"image/png"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -98,6 +99,21 @@ func absPath(p string) string {
 		return p
 	}
 	return filepath.Join(absBase, p)
+}
+
+// resolveLaunchPath 解析启动目标路径：裸命令名（无路径分隔符、无盘符）视为
+// PATH 中的可执行命令，用 exec.LookPath 解析出完整路径（含 PATHEXT 扩展名）；
+// 其他输入原样走 absPath。空输入返回空串。
+func resolveLaunchPath(p string) string {
+	if p == "" {
+		return ""
+	}
+	if !strings.ContainsAny(p, "\\/") && !(len(p) >= 2 && p[1] == ':') {
+		if full, err := exec.LookPath(p); err == nil {
+			return full
+		}
+	}
+	return absPath(p)
 }
 
 func saveImage(img image.Image, nameBase string) string {
@@ -394,18 +410,18 @@ func (a *App) AddFiles() AddResult {
 		Title: "Add Files",
 	})
 	if err != nil {
-	\t// 用户取消 / 对话框异常：返回空数组，不当作错误抛给前端
-	\treturn AddResult{Items: []*AppItem{}, Icons: map[string]string{}}
+		// 用户取消 / 对话框异常：返回空数组，不当作错误抛给前端
+		return AddResult{Items: []*AppItem{}, Icons: map[string]string{}}
 	}
 	if len(files) == 0 {
-	\treturn AddResult{Items: []*AppItem{}, Icons: map[string]string{}}
+		return AddResult{Items: []*AppItem{}, Icons: map[string]string{}}
 	}
 	return a.AddPaths(files)
 }
 
 func (a *App) AddPaths(paths []string) AddResult {
 	if len(paths) == 0 {
-	\treturn AddResult{Items: []*AppItem{}, Icons: map[string]string{}}
+		return AddResult{Items: []*AppItem{}, Icons: map[string]string{}}
 	}
 	a.mu.Lock()
 	defer a.mu.Unlock()
@@ -626,7 +642,12 @@ func (a *App) UpdateIcon(guid string) (IconResult, error) {
 		a.mu.Unlock()
 		return IconResult{}, fmt.Errorf("invalid item guid %q", guid)
 	}
-	path := absPath(item.Path)
+	if item.Path == "" {
+		a.mu.Unlock()
+		return IconResult{}, fmt.Errorf("item has no path to extract an icon from")
+	}
+	// 裸命令名（如 cmd / notepad）先解析 PATH 到真实 exe，再提取其图标
+	path := resolveLaunchPath(item.Path)
 	a.mu.Unlock()
 
 	icon := writeIcon(path)
@@ -656,9 +677,15 @@ func (a *App) Reveal(guid string) error {
 		a.mu.Unlock()
 		return fmt.Errorf("invalid item guid %q", guid)
 	}
-	path := absPath(item.Path)
+	target := absPath(item.Path)
+	if item.Path == "" && item.WorkingDir != "" {
+		target = absPath(item.WorkingDir)
+	}
 	a.mu.Unlock()
-	return revealFile(path)
+	if target == "" {
+		return nil
+	}
+	return revealFile(target)
 }
 
 func (a *App) launch(guid string) error {
@@ -668,7 +695,6 @@ func (a *App) launch(guid string) error {
 		a.mu.Unlock()
 		return fmt.Errorf("invalid item guid %q", guid)
 	}
-	path := absPath(item.Path)
 	if _, ok := a.running[guid]; ok {
 		a.mu.Unlock()
 		return nil
@@ -680,6 +706,17 @@ func (a *App) launch(guid string) error {
 	}
 	args := splitArgs(item.Args)
 	a.mu.Unlock()
+
+	// 目录型 item：未填 Path 时打开 Working directory（无进程可跟踪，不参与
+	// game mode 的跟踪/计时/最小化）；两者都空则静默不执行。
+	if item.Path == "" {
+		if workingDir == "" {
+			return nil
+		}
+		return openFile(workingDir, nil, "")
+	}
+
+	path := resolveLaunchPath(item.Path)
 
 	// Game mode off: plain open only - no tracking, no timing, no window control.
 	if !gameMode {
@@ -732,14 +769,21 @@ func (a *App) Open(guid string) error {
 		a.mu.Unlock()
 		return fmt.Errorf("invalid item guid %q", guid)
 	}
-	path := absPath(item.Path)
 	args := splitArgs(item.Args)
 	workDir := ""
 	if item.WorkingDir != "" {
 		workDir = absPath(item.WorkingDir)
 	}
 	a.mu.Unlock()
-	return openFile(path, args, workDir)
+
+	// 目录型 item：未填 Path 时打开工作目录；两者都空则静默不执行。
+	if item.Path == "" {
+		if workDir == "" {
+			return nil
+		}
+		return openFile(workDir, nil, "")
+	}
+	return openFile(resolveLaunchPath(item.Path), args, workDir)
 }
 
 func (a *App) Stop(guid string) error {

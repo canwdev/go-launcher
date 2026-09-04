@@ -2,15 +2,15 @@
 import type { AppItem } from './api'
 import type { MenuEntry } from './composables/itemMenu'
 import type { Theme } from './composables/useTheme'
-import { Ellipsis, FolderOpen, Gamepad2, Images, LayoutGrid, List, Moon, Plus, RefreshCw, Sun, SunMoon } from '@lucide/vue'
+import { Ellipsis, FilePlus2, FolderOpen, Gamepad2, Images, LayoutGrid, List, Moon, Plus, RefreshCw, Sun, SunMoon } from '@lucide/vue'
 import { useStorage } from '@vueuse/core'
 import { computed, ref } from 'vue'
 import { OpenDirectory } from './api'
 import AppDialog from './components/AppDialog.vue'
 import GridItem from './components/GridItem.vue'
 import ItemEditDialog from './components/ItemEditDialog.vue'
-import LauncherRow from './components/LauncherRow.vue'
 import ItemMenu from './components/ItemMenu.vue'
+import LauncherRow from './components/LauncherRow.vue'
 import RuntimeEditDialog from './components/RuntimeEditDialog.vue'
 import TabBar from './components/TabBar.vue'
 import { useAutoRuntime } from './composables/useAutoRuntime'
@@ -22,7 +22,7 @@ import { useTheme } from './composables/useTheme'
 import { useToast } from './composables/useToast'
 import { showError } from './utils'
 
-const { activeTab, state, store, addFilesInto, addTab, renameItem, removeItem, setActiveTab, moveTab, renameTab, removeTab, updateItemIcon, updateItem, batchUpdateIcons, save, refresh, setGameMode, setRuntimeMs, setAbsolutePaths, convertToAbsolute, convertToRelative, duplicateItem, moveItemToTab, copyItemToTab, insertEmptyAt, deleteSlotAt, reorderSlots } = useStore()
+const { activeTab, state, store, addFilesInto, addTab, renameItem, removeItem, setActiveTab, moveTab, renameTab, removeTab, updateItemIcon, updateItem, batchUpdateIcons, save, refresh, setGameMode, setRuntimeMs, setAbsolutePaths, convertToAbsolute, convertToRelative, duplicateItem, moveItemToTab, copyItemToTab, insertEmptyAt, deleteSlotAt, reorderSlots, createItem } = useStore()
 const { theme, setTheme } = useTheme()
 const { toasts, showToast } = useToast()
 const autoRuntime = useAutoRuntime()
@@ -172,7 +172,6 @@ const appMenuItems: MenuEntry[] = [
   },
 ]
 
-
 const draggingIndex = ref<number | null>(null)
 const dragFromIndex = ref<number | null>(null)
 const dragOverIndex = ref<number | null>(null)
@@ -206,15 +205,26 @@ const { open: modalOpen, title: modalTitle, name: modalName, openRename: openMod
 const { open: confirmOpen, message: confirmMessage, request: requestConfirm, requestAsync, confirm: onConfirm, close: closeConfirm } = useConfirmDialog()
 
 const editOpen = ref(false)
+const editCreating = ref(false)
 const editingItem = ref<AppItem | null>(null)
 
 function openItemEdit(item: AppItem) {
   editingItem.value = item
+  editCreating.value = false
+  editOpen.value = true
+}
+
+function openCreateItem() {
+  editingItem.value = null
+  editCreating.value = true
   editOpen.value = true
 }
 
 function onItemSaved(guid: string, fields: { name: string, path: string, args: string, working_dir: string, icon: string }) {
-  updateItem(guid, fields).catch(showError)
+  if (guid)
+    updateItem(guid, fields).catch(showError)
+  else
+    createItem(fields).catch(showError)
 }
 
 const runtimeEditOpen = ref(false)
@@ -358,6 +368,11 @@ function onBatchUpdateIcons() {
   batchUpdateIcons().catch(showError)
 }
 
+const addMenuEntries: MenuEntry[] = [
+  { key: 'pick', icon: FolderOpen, label: 'Pick files', action: onAddFiles },
+  { key: 'create', icon: FilePlus2, label: 'Create...', action: openCreateItem },
+]
+
 function onAddFiles() {
   addFilesInto().catch(showError)
 }
@@ -372,12 +387,11 @@ function onAddFiles() {
       @item-drop="onItemDropOnTab"
     >
       <div class="flex flex-1 items-center justify-end gap-1">
-        <button
-          class="flex h-6 w-6 shrink-0 items-center justify-center rounded text-gray-500 hover:bg-gray-200 dark:text-gray-300 dark:hover:bg-gray-700"
-          title="Add Files" @click="onAddFiles"
-        >
-          <Plus class="h-4 w-4" />
-        </button>
+        <ItemMenu :entries="addMenuEntries" width-class="w-40" button-class="flex h-6 w-6 shrink-0 items-center justify-center rounded text-gray-500 hover:bg-gray-200 dark:text-gray-300 dark:hover:bg-gray-700">
+          <template #button>
+            <Plus class="h-4 w-4" />
+          </template>
+        </ItemMenu>
 
         <button
           class="flex h-6 w-6 shrink-0 items-center justify-center rounded text-gray-500 hover:bg-gray-200 dark:text-gray-300 dark:hover:bg-gray-700"
@@ -491,7 +505,7 @@ function onAddFiles() {
       </template>
     </AppDialog>
 
-    <ItemEditDialog :open="editOpen" :item="editingItem" @save="onItemSaved" @close="editOpen = false" />
+    <ItemEditDialog :open="editOpen" :item="editingItem" :creating="editCreating" @save="onItemSaved" @close="editOpen = false" />
 
     <RuntimeEditDialog
       :open="runtimeEditOpen" :runtime-ms="runtimeEditMs"

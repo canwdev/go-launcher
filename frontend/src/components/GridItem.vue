@@ -154,11 +154,12 @@ function onDragEnd() {
       'ring-2 ring-blue-400': dragOver,
       'border-red-500 hover:border-red-500 dark:border-red-500 dark:hover:border-red-500': running,
     }"
+    :title="item.name"
     @click="onRun"
     @dragstart="onDragStart"
     @dragover="onDragOver"
-    @drop="onDrop"
-    @dragend="onDragEnd" @contextmenu.prevent="onContextMenu"
+    @drop="onDrop" @dragend="onDragEnd"
+    @contextmenu.prevent="onContextMenu"
   >
     <!-- 左上角运行时间 -->
     <span

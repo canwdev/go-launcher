@@ -4,10 +4,14 @@ import { ref, watch } from 'vue'
 import { PickDirectory, PickFile, PickImageFile } from '../api'
 import AppDialog from './AppDialog.vue'
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
   open: boolean
   item: AppItem | null
-}>()
+  /** true 时以"创建"模式打开：表单清空，保存不带 guid */
+  creating?: boolean
+}>(), {
+  creating: false,
+})
 
 const emit = defineEmits<{
   close: []
@@ -21,10 +25,19 @@ const workingDir = ref('')
 const icon = ref('')
 
 watch(
-  () => [props.open, props.item] as const,
+  () => [props.open, props.item, props.creating] as const,
   () => {
-    if (!props.open || !props.item)
+    if (!props.open)
       return
+    if (!props.item || props.creating) {
+      // 创建模式：清空表单，避免残留上次编辑的值
+      name.value = ''
+      path.value = ''
+      args.value = ''
+      workingDir.value = ''
+      icon.value = ''
+      return
+    }
     name.value = props.item.name ?? ''
     path.value = props.item.path ?? ''
     args.value = props.item.args ?? ''
@@ -58,9 +71,7 @@ async function browseIcon() {
 }
 
 function onSave() {
-  if (!props.item)
-    return
-  emit('save', props.item.guid, {
+  emit('save', props.item?.guid ?? '', {
     name: name.value.trim(),
     path: path.value.trim(),
     args: args.value.trim(),
@@ -72,12 +83,12 @@ function onSave() {
 </script>
 
 <template>
-  <AppDialog :open="open" title="Edit item" @close="emit('close')">
+  <AppDialog :open="open" :title="creating ? 'Create item' : 'Edit item'" @close="emit('close')">
     <form id="item-edit-form" class="flex flex-col gap-3" @submit.prevent="onSave">
       <label class="flex flex-col gap-1">
         <span class="text-xs text-gray-500 dark:text-gray-400">ID</span>
         <input
-          :value="props.item?.guid ?? ''" type="text" readonly
+          :value="creating ? 'auto' : (props.item?.guid ?? '')" type="text" readonly :disabled="creating"
           class="w-full rounded border border-gray-400 bg-gray-100 px-1.5 py-1 text-gray-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-400"
         >
       </label>

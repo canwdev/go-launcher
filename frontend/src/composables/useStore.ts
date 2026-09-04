@@ -1,4 +1,4 @@
-import type { AppData, AppItem, AppStore, ItemState } from '../api'
+﻿import type { AppData, AppItem, AppStore, ItemState } from '../api'
 import { useStorage } from '@vueuse/core'
 import { onMounted, onUnmounted, ref } from 'vue'
 import { EventsOff, EventsOn, OnFileDrop } from '../../wailsjs/runtime/runtime'
@@ -150,10 +150,46 @@ export function useStore() {
     await save()
   }
 
+  function defaultTitle(p: string): string {
+    const norm = p.replace(/[\\/]+\$/, '')
+    const idx = Math.max(norm.lastIndexOf('\\'), norm.lastIndexOf('/'))
+    const base = idx >= 0 ? norm.slice(idx + 1) : norm
+    const dot = base.lastIndexOf('.')
+    return dot > 0 ? base.slice(0, dot) : base
+  }
+
+  async function createItem(fields: { name: string, path: string, args: string, working_dir: string, icon: string }) {
+    // path 可为空：用于仅打开 Working directory 的目录型 item；name 为空才拦截
+    const name = fields.name.trim() || defaultTitle(fields.path)
+    if (!name)
+      return
+    ensureActive()
+    if (!activeTab.value) {
+      await addTab('Default')
+      ensureActive()
+    }
+    if (!activeTab.value)
+      return
+    const guid = randomUUID()
+    const item: AppItem = {
+      guid,
+      name,
+      path: fields.path.trim(),
+      args: fields.args.trim(),
+      working_dir: fields.working_dir.trim(),
+      icon: fields.icon.trim(),
+      runtime_ms: 0,
+    }
+    store.value.apps[guid] = item
+    activeTab.value.slots.push(guid)
+    await save()
+    showToast('Item created')
+  }
+
   async function addFilesInto() {
     try {
       const res = await AddFiles()
-      if (res.items.length)
+      if (res.items?.length)
         await addItems(res.items, res.icons)
     }
     catch (err) {
@@ -370,7 +406,7 @@ export function useStore() {
   function onDrop(_x: number, _y: number, paths: string[]) {
     AddPaths(paths)
       .then((res) => {
-        if (res.items.length)
+        if (res.items?.length)
           return addItems(res.items, res.icons)
       })
       .catch(showError)
@@ -400,6 +436,7 @@ export function useStore() {
     renameTab,
     moveTab,
     addItems,
+    createItem,
     addFilesInto,
     removeItem,
     renameItem,
