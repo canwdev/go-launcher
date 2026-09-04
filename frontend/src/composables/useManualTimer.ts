@@ -1,5 +1,6 @@
-﻿import { useStorage } from '@vueuse/core'
-import { onMounted, onUnmounted, ref } from 'vue'
+import { useStorage } from '@vueuse/core'
+import { onMounted, ref } from 'vue'
+import { useClockTick } from './useClockTick'
 
 /**
  * 前端手动计时器（状态完全由前端维护，useStorage 响应式持久化到 localStorage）：
@@ -7,12 +8,13 @@ import { onMounted, onUnmounted, ref } from 'vue'
  * - stop(guid, onSave)：停止指定 item 的计时，把累计毫秒数交给 onSave 回调（由调用方写入后端）
  * - elapsedMs(guid)：指定 item 的累计毫秒数（每 10s 刷新一次，驱动 runtimeText 的 (+Xm) 显示）
  * - isAutoTimer / setAutoTimer：每 item 的"启动后自动触发手动计时"开关（guid → boolean）
+ *
+ * tick 由 useClockTick 全局共享（与 useAutoRuntime 共用），不再各自维护 interval。
  */
 
-// 新 key：多计时并行格式（{ guid: startAt }）。旧单计时数据（launcher-manual-timer）不再兼容。
+// 多计时并行格式（{ guid: startAt }）
 const TIMERS_KEY = 'launcher-manual-timers'
 const AUTO_TIMER_KEY = 'launcher-auto-timer'
-const TICK_MS = 10_000
 
 export function useManualTimer() {
   // guid → startAt(ms)，多 item 可并行计时。
@@ -20,26 +22,9 @@ export function useManualTimer() {
   // 避免 null 默认值落到 'any' serializer 把对象 String 成 "[object Object]"。
   const timers = ref<Record<string, number>>({})
   // 10s tick：仅用于驱动 elapsedMs 的响应式重算，显示分钟粒度足够。
-  const tick = ref(0)
+  const tick = useClockTick()
   const persisted = useStorage<Record<string, number>>(TIMERS_KEY, {})
   const autoTimerEnabled = useStorage<Record<string, boolean>>(AUTO_TIMER_KEY, {})
-
-  let interval: number | undefined
-
-  function startInterval() {
-    if (interval)
-      return
-    interval = window.setInterval(() => {
-      tick.value = Date.now()
-    }, TICK_MS)
-  }
-
-  function stopInterval() {
-    if (interval) {
-      window.clearInterval(interval)
-      interval = undefined
-    }
-  }
 
   function persist() {
     persisted.value = { ...timers.value }
@@ -73,7 +58,6 @@ export function useManualTimer() {
       timers.value = { ...timers.value, [guid]: Date.now() }
       persist()
     }
-    startInterval()
   }
 
   /**
@@ -88,8 +72,6 @@ export function useManualTimer() {
     delete next[guid]
     timers.value = next
     persist()
-    if (Object.keys(timers.value).length === 0)
-      stopInterval()
     onSave(ms)
   }
 
@@ -101,14 +83,10 @@ export function useManualTimer() {
         if (typeof s === 'number' && s > 0)
           valid[g] = s
       }
-      if (Object.keys(valid).length > 0) {
+      if (Object.keys(valid).length > 0)
         timers.value = valid
-        startInterval()
-      }
     }
   })
-
-  onUnmounted(stopInterval)
 
   return { isActive, isAutoTimer, setAutoTimer, elapsedMs, start, stop }
 }

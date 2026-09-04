@@ -1,4 +1,4 @@
-﻿import { onMounted, onUnmounted, ref } from 'vue'
+import { useClockTick } from './useClockTick'
 
 /**
  * 前端统一"自动计时"（进程运行时长）：
@@ -7,26 +7,11 @@
  * 进程退出后由后端兜底累计（exit goroutine），前端显示自然回落回 baseline。
  *
  * 与 useManualTimer（手动计时，用户主观记录）相互独立，可同时存在。
+ * tick 由 useClockTick 全局共享，不在此重复创建 interval。
  */
 
-const TICK_MS = 10_000
-
 export function useAutoRuntime() {
-  const now = ref(0)
-  let interval: number | undefined
-
-  onMounted(() => {
-    interval = window.setInterval(() => {
-      now.value = Date.now()
-    }, TICK_MS)
-  })
-
-  onUnmounted(() => {
-    if (interval) {
-      window.clearInterval(interval)
-      interval = undefined
-    }
-  })
+  const now = useClockTick()
 
   /**
    * 运行中显示毫秒数 = baseline + 已运行增量；未运行则返回 baseline。

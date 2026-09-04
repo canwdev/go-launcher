@@ -46,7 +46,14 @@ func isShortcutFile(path string) bool {
 }
 
 func defaultTitle(path string) string {
-	return strings.TrimSuffix(filepath.Base(path), filepath.Ext(path))
+	base := filepath.Base(path)
+	// filepath.Ext 会把以点开头的隐藏文件/目录的整个 basename 当作扩展名返回
+	// （如 ".pnpm-store" → Ext 返回 ".pnpm-store"），直接 TrimSuffix 会把名字剥成空串。
+	// 只在扩展名的点位于 basename 内部（index > 0）时才剥除，保留隐藏名本身。
+	if idx := strings.LastIndex(base, "."); idx > 0 {
+		return base[:idx]
+	}
+	return base
 }
 
 func formatRuntime(ms int64) string {

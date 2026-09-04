@@ -1,4 +1,4 @@
-﻿import type { AppData, AppItem, AppStore, ItemState } from '../api'
+import type { AppData, AppItem, AppStore, ItemState } from '../api'
 import { useStorage } from '@vueuse/core'
 import { onMounted, onUnmounted, ref } from 'vue'
 import { EventsOff, EventsOn, OnFileDrop } from '../../wailsjs/runtime/runtime'
@@ -41,6 +41,22 @@ export function useStore() {
   const activeTab = ref<Category | null>(null)
   // 响应式持久化：当前激活 tab 自动同步 localStorage
   const savedActiveTab = useStorage<string>(ACTIVE_TAB_KEY, '')
+
+  // 全局 busy 状态：耗时异步操作（批量图标/路径转换/添加文件）期间驱动 UI loading 提示
+  const busy = ref(false)
+  const busyMessage = ref('')
+
+  async function runBusy<T>(message: string, fn: () => Promise<T>): Promise<T> {
+    busy.value = true
+    busyMessage.value = message
+    try {
+      return await fn()
+    }
+    finally {
+      busy.value = false
+      busyMessage.value = ''
+    }
+  }
 
   function applyData(data: AppData) {
     store.value = data.store as unknown as Store
@@ -188,9 +204,11 @@ export function useStore() {
 
   async function addFilesInto() {
     try {
-      const res = await AddFiles()
-      if (res.items?.length)
-        await addItems(res.items, res.icons)
+      await runBusy('Adding files...', async () => {
+        const res = await AddFiles()
+        if (res.items?.length)
+          await addItems(res.items, res.icons)
+      })
     }
     catch (err) {
       showError(err)
@@ -277,7 +295,7 @@ export function useStore() {
 
   /**
    * Grid 拖拽重排：把源槽（item 或空槽）移动到目标位置；copy=true 时复制 item 到目标位。
-   * 与列表视图本地 splice 不同，这里统一走 store + 持久化。
+   * 列表视图的拖拽也复用它（slot index 语义，正确处理含空槽场景）。
    */
   async function reorderSlots(from: number, to: number, copy = false) {
     const tab = activeTab.value
@@ -343,27 +361,29 @@ export function useStore() {
     const app = store.value.apps[guid]
     if (!app)
       return
+    // 本地 Object.assign 已是权威数据，SaveData 直接持久化，无需再全量 refresh
     Object.assign(app, fields)
     await saveNow()
-    await refresh()
     showToast('Item updated')
   }
 
   async function batchUpdateIcons() {
-    let count = 0
-    for (const app of Object.values(store.value.apps)) {
-      if (!isAutoIcon(app.icon))
-        continue
-      try {
-        const res = await UpdateIcon(app.guid)
-        await updateItemIcon(app.guid, res.icon, res.icon_url, true)
-        count++
+    await runBusy('Updating icons...', async () => {
+      let count = 0
+      for (const app of Object.values(store.value.apps)) {
+        if (!isAutoIcon(app.icon))
+          continue
+        try {
+          const res = await UpdateIcon(app.guid)
+          await updateItemIcon(app.guid, res.icon, res.icon_url, true)
+          count++
+        }
+        catch {
+          // skip items whose icon cannot be regenerated
+        }
       }
-      catch {
-        // skip items whose icon cannot be regenerated
-      }
-    }
-    showToast(`Updated ${count} icon${count === 1 ? '' : 's'}`)
+      showToast(`Updated ${count} icon${count === 1 ? '' : 's'}`)
+    })
   }
 
   async function setGameMode(enabled: boolean) {
@@ -372,8 +392,15 @@ export function useStore() {
   }
 
   async function setRuntimeMs(guid: string, ms: number) {
-    await SetRuntimeMs(guid, Math.max(0, Math.floor(ms)))
-    await refresh()
+    const cleanMs = Math.max(0, Math.floor(ms))
+    await SetRuntimeMs(guid, cleanMs)
+    // SetRuntimeMs 后端不推送 state:updated，本地同步两处即可，避免全量 refresh
+    const app = store.value.apps[guid]
+    if (app)
+      app.runtime_ms = cleanMs
+    const st = state.value[guid]
+    if (st)
+      st.runtime_ms = cleanMs
   }
 
   async function setAbsolutePaths(enabled: boolean) {
@@ -383,8 +410,10 @@ export function useStore() {
 
   async function convertToAbsolute() {
     try {
-      await ConvertToAbsolute()
-      await refresh()
+      await runBusy('Converting to absolute path...', async () => {
+        await ConvertToAbsolute()
+        await refresh()
+      })
       showToast('Converted to absolute path')
     }
     catch (err) {
@@ -394,8 +423,10 @@ export function useStore() {
 
   async function convertToRelative() {
     try {
-      await ConvertToRelative()
-      await refresh()
+      await runBusy('Converting to relative path...', async () => {
+        await ConvertToRelative()
+        await refresh()
+      })
       showToast('Converted to relative path')
     }
     catch (err) {
@@ -428,6 +459,8 @@ export function useStore() {
     store,
     state,
     activeTab,
+    busy,
+    busyMessage,
     refresh,
     save,
     setActiveTab,

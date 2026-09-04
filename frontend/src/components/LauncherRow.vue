@@ -1,4 +1,4 @@
-﻿<script setup lang="ts">
+<script setup lang="ts">
 import type { AppItem } from '../api'
 import { Ellipsis } from '@lucide/vue'
 import { computed, ref } from 'vue'
@@ -36,7 +36,7 @@ const emit = defineEmits<{
   'launched': []
   'dragstart': [e: DragEvent]
   'dragover': []
-  'drop': []
+  'drop': [ctrl: boolean]
   'dragend': []
 }>()
 
@@ -113,12 +113,13 @@ function onContextMenu(e: MouseEvent) {
 <template>
   <div
     draggable="true"
-    class="flex select-none items-center gap-2.5 rounded px-2.5 py-1.5 transition-colors duration-150 hover:bg-gray-200/50 dark:hover:bg-gray-800"
+    class="flex cursor-grab select-none items-center gap-2.5 rounded px-2.5 py-1.5 transition-colors duration-150 hover:bg-gray-200/50 dark:hover:bg-gray-800"
     :class="{
+      'cursor-grabbing': dragging,
       'opacity-40': dragging,
       'ring-2 ring-blue-400': dragOver,
     }" @dblclick="onDoubleClick" @dragstart="emit('dragstart', $event)" @dragover.prevent="emit('dragover')"
-    @drop.prevent="emit('drop')" @dragend="emit('dragend')" @contextmenu.prevent="onContextMenu"
+    @drop.prevent="emit('drop', $event.ctrlKey || $event.metaKey)" @dragend="emit('dragend')" @contextmenu.prevent="onContextMenu"
   >
     <img
       v-if="iconUrl || item.icon || undefined" :src="iconUrl || item.icon || undefined" alt=""
