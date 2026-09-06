@@ -82,7 +82,7 @@ const dataDir = "go-launcher-data"
 
 const saveFile = dataDir + "/go-launcher-data.json"
 
-const iconsDir = dataDir + "/icons"
+const iconsDir = dataDir + "/cached-icons"
 
 var absBase, _ = filepath.Abs(".")
 
