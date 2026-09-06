@@ -2,8 +2,33 @@
 
 @custom-variant dark (&:where(.dark, .dark *));
 
+/* ---- Theme accent: remap Tailwind blue → brand #00ABF2 (500) ---- */
+@theme {
+  --color-blue-50: #e7fdff;
+  --color-blue-100: #c0f8ff;
+  --color-blue-200: #96ebff;
+  --color-blue-300: #64d7ff;
+  --color-blue-400: #3ac1ff;
+  --color-blue-500: #00abf2;
+  --color-blue-600: #0089c8;
+  --color-blue-700: #006da0;
+  --color-blue-800: #005076;
+  --color-blue-900: #09364d;
+  --color-blue-950: #0a2230;
+}
+
 :root {
   color-scheme: light;
+}
+
+/* Text inputs keep a visible focus ring in the theme accent color.
+   Respect inputs that intentionally disable their outline (e.g. search box
+   inside its own bordered container). */
+input:focus-visible:not(.outline-none),
+textarea:focus-visible:not(.outline-none),
+select:focus-visible:not(.outline-none) {
+  outline: 2px solid var(--color-blue-500);
+  outline-offset: 0;
 }
 
 html.dark {
@@ -115,13 +140,13 @@ html.dark body {
     background-color: transparent;
   }
   15% {
-    background-color: rgba(59, 130, 246, 0.18);
+    background-color: rgba(0, 171, 242, 0.18);
   }
   25% {
-    background-color: rgba(59, 130, 246, 0.28);
+    background-color: rgba(0, 171, 242, 0.28);
   }
   45% {
-    background-color: rgba(59, 130, 246, 0.18);
+    background-color: rgba(0, 171, 242, 0.18);
   }
 }
 

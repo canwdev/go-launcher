@@ -326,7 +326,7 @@ function searchLocate(guid: string, tabGuid: string) {
       >
       <template #actions>
         <button
-          class="rounded border border-gray-400 bg-white px-2.5 py-1 hover:bg-gray-200 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 dark:hover:bg-gray-600"
+          class="rounded border border-blue-500 bg-blue-500 px-2.5 py-1 text-white hover:bg-blue-600"
           @click="dialogs.onModalOk"
         >
           OK
