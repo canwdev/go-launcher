@@ -6,3 +6,4 @@ node_modules
 /frontend/dist
 *.json.md5
 *.log
+.gocache

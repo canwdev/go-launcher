@@ -198,7 +198,15 @@ export function useStore() {
     }
     store.value.apps[guid] = item
     activeTab.value.slots.push(guid)
-    await save()
+    // 创建时若手动指定了 icon（对话框 Browse/输入路径），需先立即持久化，
+    // 再向后端取回 base64 icon_url，保证新建条目图标及时显示
+    if (item.icon) {
+      await saveNow()
+      await syncItemIconState(guid)
+    }
+    else {
+      await save()
+    }
     showToast('Item created')
   }
 
@@ -357,13 +365,37 @@ export function useStore() {
       showToast('Icon updated')
   }
 
+  // 手动修改 icon 字段（编辑/新建对话框）后，向后端取回该 item 的 base64
+  // icon_url（icon 指向本地图片路径，需后端读文件转 data URL）。仅合并该
+  // guid 的 state，避免整表刷新引起闪烁 / 重排。
+  async function syncItemIconState(guid: string) {
+    try {
+      const data = await GetData()
+      const st = data.state[guid]
+      if (st)
+        state.value[guid] = { ...state.value[guid], ...st }
+    }
+    catch (err) {
+      console.error(err)
+    }
+  }
+
   async function updateItem(guid: string, fields: Partial<AppItem>) {
     const app = store.value.apps[guid]
     if (!app)
       return
     // 本地 Object.assign 已是权威数据，SaveData 直接持久化，无需再全量 refresh
+    const prevIcon = app.icon
+    const prevIconUrl = state.value[guid]?.icon_url ?? ''
+    const clearing = fields.icon === '' && (fields.icon !== prevIcon || prevIconUrl !== '')
     Object.assign(app, fields)
+    // Clear 图标（icon 置空）→ 显示立即清空：本地先把 base64 置空，
+    // 持久化后再取回后端确认值（''）
+    if (clearing && state.value[guid])
+      state.value[guid] = { ...state.value[guid], icon_url: '' }
     await saveNow()
+    if (fields.icon !== undefined && (fields.icon !== prevIcon || clearing))
+      await syncItemIconState(guid)
     showToast('Item updated')
   }
 

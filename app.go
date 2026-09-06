@@ -550,37 +550,68 @@ func (a *App) convertItem(guid string, absolute bool) error {
 	return nil
 }
 
+// pickToStored converts a path returned by an OS picker into the form the item
+// field should show and persist. With "Abs path for new items" on, the picked
+// absolute path is kept as-is; with it off, the pick is relativized against the
+// launcher base dir (like AddPaths does for new items), so values inserted into
+// the create/edit dialogs automatically follow the setting. Paths that cannot
+// be relativized (e.g. on another drive) are returned unchanged.
+func (a *App) pickToStored(picked string) string {
+	if picked == "" {
+		return picked
+	}
+	a.mu.Lock()
+	absolutePaths := a.store.Settings.AbsolutePaths
+	a.mu.Unlock()
+	if absolutePaths {
+		return picked
+	}
+	return toStoredPath(picked)
+}
+
 func (a *App) PickFile(initialDir string) (string, error) {
 	if initialDir == "" {
 		initialDir = absBase
 	}
-	return runtime.OpenFileDialog(a.ctx, runtime.OpenDialogOptions{
+	picked, err := runtime.OpenFileDialog(a.ctx, runtime.OpenDialogOptions{
 		Title:            "Select File",
 		DefaultDirectory: initialDir,
 	})
+	if err != nil {
+		return "", err
+	}
+	return a.pickToStored(picked), nil
 }
 
 func (a *App) PickImageFile(initialDir string) (string, error) {
 	if initialDir == "" {
 		initialDir = absBase
 	}
-	return runtime.OpenFileDialog(a.ctx, runtime.OpenDialogOptions{
+	picked, err := runtime.OpenFileDialog(a.ctx, runtime.OpenDialogOptions{
 		Title:            "Select Image",
 		DefaultDirectory: initialDir,
 		Filters: []runtime.FileFilter{
 			{DisplayName: "Images (*.png;*.jpg;*.jpeg;*.gif;*.bmp;*.webp;*.svg)", Pattern: "*.png;*.jpg;*.jpeg;*.gif;*.bmp;*.webp;*.svg"},
 		},
 	})
+	if err != nil {
+		return "", err
+	}
+	return a.pickToStored(picked), nil
 }
 
 func (a *App) PickDirectory(initialDir string) (string, error) {
 	if initialDir == "" {
 		initialDir = absBase
 	}
-	return runtime.OpenDirectoryDialog(a.ctx, runtime.OpenDialogOptions{
+	picked, err := runtime.OpenDirectoryDialog(a.ctx, runtime.OpenDialogOptions{
 		Title:            "Select Folder",
 		DefaultDirectory: initialDir,
 	})
+	if err != nil {
+		return "", err
+	}
+	return a.pickToStored(picked), nil
 }
 
 func (a *App) OpenDirectory(path string) error {
