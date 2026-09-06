@@ -53,7 +53,8 @@ const autoRuntime = useAutoRuntime()
 const timer = useManualTimer()
 // reactive 包裹：composable 返回的 ref 属性在模板中自动解包（嵌套 ref 不会默认解包）
 const dialogs = reactive(useDialogs(storeApi, timer))
-const { searchOpen, searchOnLaunch } = useSearch({ setActiveTab: storeApi.setActiveTab, timer })
+const { searchOpen, searchOnLaunch } = useSearch({ timer })
+const mainEl = ref<HTMLElement | null>(null)
 
 // 视图模式：list（列表） / grid（网格）。UI 偏好，走 localStorage。
 const viewMode = useStorage<'list' | 'grid'>('launcher-view-mode', 'list')
@@ -179,6 +180,30 @@ function onItemDropOnTab(guid: string, tabGuid: string, copy: boolean) {
   else
     moveItemToTab(guid, tabGuid).catch(showError)
 }
+
+/**
+ * 搜索结果“定位”：切到条目所在 tab → 滚动到可视区并闪烁高亮。
+ * tab 内容包在 Transition(fade, out-in, 各 0.16s) 里，需等切换动画完成后再
+ * 滚动/闪烁，否则新 tab 尚未挂载、元素查找会落空。
+ */
+function searchLocate(guid: string, tabGuid: string) {
+  storeApi.setActiveTab(tabGuid)
+  window.setTimeout(() => {
+    const root = mainEl.value
+    if (!root)
+      return
+    const itemEl = root.querySelector<HTMLElement>(`[data-guid="${guid}"]`)
+    if (!itemEl)
+      return
+    itemEl.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    // 清理上一个闪烁元素并强制 reflow，保证连续定位同一项也能重放动画
+    root.querySelectorAll('.locate-flash').forEach((n) => {
+      n.classList.remove('locate-flash')
+    })
+    void itemEl.offsetWidth
+    itemEl.classList.add('locate-flash')
+  }, 380)
+}
 </script>
 
 <template>
@@ -227,7 +252,7 @@ function onItemDropOnTab(guid: string, tabGuid: string, copy: boolean) {
       </div>
     </TabBar>
 
-    <main class="flex-1 overflow-y-auto">
+    <main ref="mainEl" class="flex-1 overflow-y-auto">
       <Transition name="fade" mode="out-in">
         <div :key="activeTab?.guid ?? 'empty'" class="min-h-full">
           <div v-if="viewMode === 'list' && rows.length === 0" class="p-5 text-center text-gray-500 dark:text-gray-400">
@@ -365,7 +390,7 @@ function onItemDropOnTab(guid: string, tabGuid: string, copy: boolean) {
       {{ busyMessage }}
     </div>
   </div>
-  <SearchOverlay v-model:open="searchOpen" :store="store" :state="state" :on-launch="searchOnLaunch" />
+  <SearchOverlay v-model:open="searchOpen" :store="store" :state="state" :on-launch="searchOnLaunch" :on-locate="searchLocate" />
 </template>
 
 <style scoped>

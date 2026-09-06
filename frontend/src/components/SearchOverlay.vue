@@ -1,15 +1,16 @@
 <script setup lang="ts">
-import { Search } from '@lucide/vue'
-import { useThrottleFn } from '@vueuse/core'
-import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import type { ItemState } from '../api'
 import type { Store } from '../composables/useStore'
+import { Crosshair, Search } from '@lucide/vue'
+import { useThrottleFn } from '@vueuse/core'
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 
 const props = defineProps<{
   open: boolean
   store: Store
   state: Record<string, ItemState>
-  onLaunch: (guid: string, tabGuid: string) => void
+  onLaunch: (guid: string) => void
+  onLocate: (guid: string, tabGuid: string) => void
 }>()
 
 const emit = defineEmits<{ (e: 'update:open', v: boolean): void }>()
@@ -128,7 +129,12 @@ onMounted(() => window.addEventListener('keydown', onWindowKeydown))
 onUnmounted(() => window.removeEventListener('keydown', onWindowKeydown))
 
 function launch(h: SearchHit) {
-  props.onLaunch(h.guid, h.tabGuid)
+  props.onLaunch(h.guid)
+  emit('update:open', false)
+}
+
+function locate(h: SearchHit) {
+  props.onLocate(h.guid, h.tabGuid)
   emit('update:open', false)
 }
 
@@ -181,30 +187,50 @@ function onMouseEnter(i: number) {
           <div v-if="!filtered.length" class="px-3 py-6 text-center text-sm text-gray-400">
             {{ query.trim() ? 'No results' : 'Type to search...' }}
           </div>
-          <button
+          <!-- 结果行：整行运行（Launch），右侧 hover 出现定位按钮（Locate）。
+              结构上用外层 div 承载高亮/文本色，避免在 <button> 里嵌套按钮。 -->
+          <div
             v-for="(h, i) in filtered"
             :key="h.guid"
-            type="button"
-            class="flex w-full items-center gap-2.5 rounded-md px-2.5 py-1.5 text-left transition-colors duration-75"
-            :class="i === activeIndex ? 'bg-blue-500 text-white' : 'text-gray-700 hover:bg-gray-200/70 dark:text-gray-200 dark:hover:bg-gray-700'"
-            @mousedown.prevent="launch(h)"
+            class="group flex w-full items-center rounded-md py-1.5 pl-2.5 pr-1 text-left transition-colors duration-75"
+            :class="i === activeIndex
+              ? 'bg-blue-500 text-white'
+              : 'text-gray-700 hover:bg-gray-200/70 dark:text-gray-200 dark:hover:bg-gray-700'"
             @mouseenter="onMouseEnter(i)"
           >
-            <img v-if="h.iconUrl" :src="h.iconUrl" class="h-5 w-5 shrink-0 object-contain" alt="">
-            <span v-else class="flex h-5 w-5 shrink-0 items-center justify-center rounded bg-gray-200 text-[10px] font-semibold text-gray-500 dark:bg-gray-700">
-              {{ h.name.charAt(0).toUpperCase() }}
-            </span>
-            <span class="min-w-0 flex-1 truncate text-sm">{{ h.name }}</span>
-            <span class="max-w-[40%] truncate text-xs opacity-60">{{ h.path || h.tabName }}</span>
-            <span
-              class="shrink-0 rounded px-1.5 py-0.5 text-[11px]"
-              :class="i === activeIndex ? 'bg-white/20 text-white/90' : 'bg-gray-200/70 text-gray-500 dark:bg-gray-700 dark:text-gray-300'"
-            >{{ h.tabName }}</span>
-          </button>
+            <button
+              type="button"
+              class="flex min-w-0 flex-1 items-center gap-2.5 text-left text-inherit"
+              @mousedown.prevent="launch(h)"
+            >
+              <img v-if="h.iconUrl" :src="h.iconUrl" class="h-5 w-5 shrink-0 object-contain" alt="">
+              <span v-else class="flex h-5 w-5 shrink-0 items-center justify-center rounded bg-gray-200 text-[10px] font-semibold text-gray-500 dark:bg-gray-700">
+                {{ h.name.charAt(0).toUpperCase() }}
+              </span>
+              <span class="min-w-0 flex-1 truncate text-sm">{{ h.name }}</span>
+              <span class="max-w-[35%] truncate text-xs opacity-60">{{ h.path || h.tabName }}</span>
+              <span
+                class="shrink-0 rounded px-1.5 py-0.5 text-[11px]"
+                :class="i === activeIndex ? 'bg-white/20 text-white/90' : 'bg-gray-200/70 text-gray-500 dark:bg-gray-700 dark:text-gray-300'"
+              >{{ h.tabName }}</span>
+            </button>
+            <button
+              type="button"
+              :title="`Locate in ${h.tabName}`"
+              aria-label="Locate in tab"
+              class="ml-1 shrink-0 rounded p-1 transition-opacity duration-75"
+              :class="i === activeIndex
+                ? 'opacity-100 text-white/90 hover:bg-white/20'
+                : 'pointer-events-none opacity-0 text-gray-500 hover:bg-gray-200 hover:text-gray-700 group-hover:pointer-events-auto group-hover:opacity-100 dark:text-gray-300 dark:hover:bg-gray-600'"
+              @click.stop.prevent="locate(h)"
+            >
+              <Crosshair class="h-4 w-4" />
+            </button>
+          </div>
         </div>
 
         <div class="border-t border-gray-200 px-3 py-1.5 text-[11px] text-gray-400 dark:border-gray-700">
-          ↑↓ navigate · Enter launch · Esc close
+          ↑↓ navigate · Enter launch · hover ◉ to locate · Esc close
         </div>
       </div>
     </div>

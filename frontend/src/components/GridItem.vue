@@ -147,7 +147,7 @@ function onDragEnd() {
 <template>
   <!-- item 卡片 -->
   <div
-    v-if="item" draggable="true"
+    v-if="item" draggable="true" :data-guid="item.guid"
     class="group relative flex aspect-square select-none flex-col items-center justify-center rounded-lg p-2 pt-4 transition-colors duration-150 hover:bg-gray-200/50 dark:hover:bg-gray-800"
     :class="{
       'cursor-grabbing': dragging,
@@ -187,7 +187,9 @@ function onDragEnd() {
       v-if="iconUrl || item.icon" :src="iconUrl || item.icon" alt=""
       class="h-16 w-16 shrink-0 object-contain"
     >
-    <div v-else class="h-16 w-16 shrink-0 rounded " />
+    <div v-else class="flex h-16 w-16 shrink-0 rounded items-center justify-center  bg-gray-200 text-[32px] font-semibold text-gray-500 dark:bg-gray-700">
+      {{ item.name.charAt(0).toUpperCase() }}
+    </div>
 
     <!-- 标题 -->
     <span class="mt-1.5 w-full truncate text-center text-xs text-gray-700 dark:text-gray-200">{{ item.name }}</span>

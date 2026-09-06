@@ -6,15 +6,16 @@ import { showError } from '../utils'
 /**
  * 全局搜索浮层：打开状态 + 启动回调 + Ctrl/Cmd+F 快捷键。
  * 从 App.vue 抽离，保持主组件精简。
+ *
+ * 注意：从搜索结果“运行”条目时不再自动切换到该条目所在 tab；如需定位，
+ * 由结果行上的 locate 按钮触发（见 App.vue searchLocate）。
  */
 export function useSearch(ctx: {
-  setActiveTab: (guid: string) => void
   timer: ReturnType<typeof useManualTimer>
 }) {
   const searchOpen = ref(false)
 
-  const searchOnLaunch = (guid: string, tabGuid: string) => {
-    ctx.setActiveTab(tabGuid)
+  const searchOnLaunch = (guid: string) => {
     const p = ctx.timer.isAutoTimer(guid) ? Open(guid) : Launch(guid)
     p.catch(showError)
   }

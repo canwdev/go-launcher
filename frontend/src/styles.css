@@ -103,3 +103,25 @@ html.dark body {
   opacity: 0;
 }
 
+/* Search "locate" highlight: brief ring + background flash on the located row */
+.locate-flash {
+  animation: locate-flash 1.1s ease;
+}
+
+@keyframes locate-flash {
+  0%,
+  60%,
+  100% {
+    background-color: transparent;
+  }
+  15% {
+    background-color: rgba(59, 130, 246, 0.18);
+  }
+  25% {
+    background-color: rgba(59, 130, 246, 0.28);
+  }
+  45% {
+    background-color: rgba(59, 130, 246, 0.18);
+  }
+}
+

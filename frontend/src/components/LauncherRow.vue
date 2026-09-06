@@ -112,7 +112,7 @@ function onContextMenu(e: MouseEvent) {
 
 <template>
   <div
-    draggable="true"
+    draggable="true" :data-guid="item.guid"
     class="flex select-none items-center gap-2.5 rounded px-2.5 py-1.5 transition-colors duration-150 hover:bg-gray-200/50 dark:hover:bg-gray-800"
     :class="{
       'cursor-grabbing': dragging,
@@ -125,7 +125,10 @@ function onContextMenu(e: MouseEvent) {
       v-if="iconUrl || item.icon || undefined" :src="iconUrl || item.icon || undefined" alt=""
       class="h-7 w-7 shrink-0 object-contain"
     >
-    <span v-else class="h-7 w-7 shrink-0 object-contain" />
+    <div v-else class="flex h-7 w-7 shrink-0 object-contain rounded items-center justify-center  bg-gray-200 text-[16px] font-semibold text-gray-500 dark:bg-gray-700">
+      {{ item.name.charAt(0).toUpperCase() }}
+    </div>
+
     <span class="min-w-0 flex-1 truncate">{{ item.name }}</span>
     <span
       v-if="gameMode" data-runtime-edit class="inline-flex shrink-0 items-center gap-0.5 rounded px-0.5"
