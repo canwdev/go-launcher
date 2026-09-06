@@ -34,6 +34,7 @@ const {
   busyMessage,
   refresh,
   setGameMode,
+  setAutoHide,
   setAbsolutePaths,
   duplicateItem,
   moveItemToTab,
@@ -150,8 +151,10 @@ function onAddFiles() {
 
 const appMenuItems = buildAppMenu({
   getGameMode: () => store.value.settings.game_mode,
-  getAbsolutePaths: () => store.value.settings.absolute_paths,
   toggleGameMode: () => setGameMode(!store.value.settings.game_mode),
+  getAutoHide: () => store.value.settings.auto_hide,
+  toggleAutoHide: () => setAutoHide(!store.value.settings.auto_hide),
+  getAbsolutePaths: () => store.value.settings.absolute_paths,
   toggleAbsolutePaths: () => setAbsolutePaths(!store.value.settings.absolute_paths),
   onRefresh,
   onOpenProgramDir,

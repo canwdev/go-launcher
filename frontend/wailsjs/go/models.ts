@@ -77,6 +77,7 @@ export namespace main {
 	export class Settings {
 	    game_mode: boolean;
 	    absolute_paths: boolean;
+	    auto_hide: boolean;
 	
 	    static createFrom(source: any = {}) {
 	        return new Settings(source);
@@ -86,6 +87,7 @@ export namespace main {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.game_mode = source["game_mode"];
 	        this.absolute_paths = source["absolute_paths"];
+	        this.auto_hide = source["auto_hide"];
 	    }
 	}
 	export class CategoryNode {

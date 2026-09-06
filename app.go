@@ -41,6 +41,10 @@ type CategoryNode struct {
 type Settings struct {
 	GameMode      bool `json:"game_mode"`
 	AbsolutePaths bool `json:"absolute_paths"`
+	// AutoHide 是窗口最小化/恢复的“总开关”：开启时启动任意条目都会最小化
+	// launcher（Game mode 的跟踪进程结束后自动恢复窗口）；关闭时启动不做任何
+	// 最小化，Game mode 的最小化与自动恢复逻辑同样失效（跟踪/计时不受影响）。
+	AutoHide bool `json:"auto_hide"`
 }
 
 type AppStore struct {
@@ -147,7 +151,7 @@ func defaultStore() AppStore {
 		Categories: []CategoryNode{
 			{GUID: uuid.NewString(), Name: "Default", Slots: []*string{}},
 		},
-		Settings: Settings{GameMode: true, AbsolutePaths: true},
+		Settings: Settings{GameMode: true, AbsolutePaths: true, AutoHide: true},
 	}
 }
 
@@ -182,6 +186,11 @@ func loadStore() AppStore {
 	// on startup. An explicit "game_mode": false is always respected.
 	if settingsMissingKey(data, "game_mode") {
 		store.Settings.GameMode = true
+	}
+	// Files predating the auto_hide key carry no auto_hide setting; default it to
+	// ON so launching keeps hiding the window until the user opts out.
+	if settingsMissingKey(data, "auto_hide") {
+		store.Settings.AutoHide = true
 	}
 	if store.Apps == nil {
 		store.Apps = map[string]*AppItem{}
@@ -745,6 +754,7 @@ func (a *App) launch(guid string) error {
 		return nil
 	}
 	gameMode := a.store.Settings.GameMode
+	autoHide := a.store.Settings.AutoHide
 	workingDir := ""
 	if item.WorkingDir != "" {
 		workingDir = absPath(item.WorkingDir)
@@ -753,19 +763,32 @@ func (a *App) launch(guid string) error {
 	a.mu.Unlock()
 
 	// 目录型 item：未填 Path 时打开 Working directory（无进程可跟踪，不参与
-	// game mode 的跟踪/计时/最小化）；两者都空则静默不执行。
+	// game mode 的跟踪/计时）；两者都空则静默不执行。
 	if item.Path == "" {
 		if workingDir == "" {
 			return nil
 		}
-		return openFile(workingDir, nil, "")
+		if err := openFile(workingDir, nil, ""); err != nil {
+			return err
+		}
+		// Auto-hide 总开关开启：打开目录也直接最小化 launcher，无自动恢复
+		a.minimiseIfAutoHide(autoHide)
+		return nil
 	}
 
 	path := resolveLaunchPath(item.Path)
 
-	// Game mode off: plain open only - no tracking, no timing, no window control.
+	// Auto-hide 关闭 = 主开关关闭：无论 game mode 与否都不最小化、不自动恢复
+	// （game mode 仍跟踪/计时）。此处仅当 autoHide 开启时才涉及窗口控制。
+	//
+	// Game mode off: plain open only - no tracking, no timing. Auto-hide 开启时
+	// 直接最小化 launcher，因未跟踪进程故不会自动恢复窗口。
 	if !gameMode {
-		return openFile(path, args, workingDir)
+		if err := openFile(path, args, workingDir); err != nil {
+			return err
+		}
+		a.minimiseIfAutoHide(autoHide)
+		return nil
 	}
 
 	if isExecutable(path) {
@@ -777,7 +800,9 @@ func (a *App) launch(guid string) error {
 		a.running[guid] = p
 		a.mu.Unlock()
 		a.emitState()
-		runtime.WindowMinimise(a.ctx)
+		if autoHide {
+			runtime.WindowMinimise(a.ctx)
+		}
 		go func() {
 			_ = p.wait()
 			elapsed := time.Since(p.start).Milliseconds()
@@ -791,13 +816,28 @@ func (a *App) launch(guid string) error {
 			a.writeStore()
 			a.mu.Unlock()
 			a.emitState()
-			if restore {
+			// Auto-hide 开启（且本进程是 game mode 跟踪的）才在最后一个进程
+			// 结束后自动恢复窗口；开关关闭时不做任何窗口控制。
+			if autoHide && restore {
 				runtime.WindowUnminimise(a.ctx)
 			}
 		}()
 		return nil
 	}
-	return openFile(path, args, workingDir)
+	if err := openFile(path, args, workingDir); err != nil {
+		return err
+	}
+	a.minimiseIfAutoHide(autoHide)
+	return nil
+}
+
+// minimiseIfAutoHide 在 Auto-hide Launcher 开启时把 launcher 窗口最小化。
+// 仅供非跟踪启动使用（game mode off / 非可执行文件 / 目录型 item / Open），
+// 由于没有进程句柄可监听退出，窗口最小化后不会自动恢复。
+func (a *App) minimiseIfAutoHide(autoHide bool) {
+	if autoHide {
+		runtime.WindowMinimise(a.ctx)
+	}
 }
 
 func (a *App) Launch(guid string) error {
@@ -805,8 +845,9 @@ func (a *App) Launch(guid string) error {
 }
 
 // Open launches an item without any process tracking (no runtime tracking, no
-// Stop handle, no auto-minimize). Used for items that opt into manual-only
-// timing (autoTimer), e.g. programs the launcher cannot track as a process.
+// Stop handle). Used for items that opt into manual-only timing (autoTimer),
+// e.g. programs the launcher cannot track as a process. Auto-hide 开启时同样
+// 最小化 launcher；未跟踪进程，故不会自动恢复窗口。
 func (a *App) Open(guid string) error {
 	a.mu.Lock()
 	item := a.findItem(guid)
@@ -814,6 +855,7 @@ func (a *App) Open(guid string) error {
 		a.mu.Unlock()
 		return fmt.Errorf("invalid item guid %q", guid)
 	}
+	autoHide := a.store.Settings.AutoHide
 	args := splitArgs(item.Args)
 	workDir := ""
 	if item.WorkingDir != "" {
@@ -826,9 +868,17 @@ func (a *App) Open(guid string) error {
 		if workDir == "" {
 			return nil
 		}
-		return openFile(workDir, nil, "")
+		if err := openFile(workDir, nil, ""); err != nil {
+			return err
+		}
+		a.minimiseIfAutoHide(autoHide)
+		return nil
 	}
-	return openFile(resolveLaunchPath(item.Path), args, workDir)
+	if err := openFile(resolveLaunchPath(item.Path), args, workDir); err != nil {
+		return err
+	}
+	a.minimiseIfAutoHide(autoHide)
+	return nil
 }
 
 func (a *App) Stop(guid string) error {

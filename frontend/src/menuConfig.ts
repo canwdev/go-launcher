@@ -4,8 +4,10 @@ import { BrowserOpenURL } from '../wailsjs/runtime/runtime'
 
 export interface AppMenuCtx {
   getGameMode: () => boolean
-  getAbsolutePaths: () => boolean
   toggleGameMode: () => void
+  getAutoHide: () => boolean
+  toggleAutoHide: () => void
+  getAbsolutePaths: () => boolean
   toggleAbsolutePaths: () => void
   onRefresh: () => void
   onOpenProgramDir: () => void
@@ -24,6 +26,13 @@ export function buildAppMenu(ctx: AppMenuCtx): MenuEntry[] {
       label: 'Game mode',
       checked: ctx.getGameMode,
       action: ctx.toggleGameMode,
+    },
+    {
+      key: 'auto-hide',
+      toggle: true,
+      label: 'Auto-hide Launcher',
+      checked: ctx.getAutoHide,
+      action: ctx.toggleAutoHide,
     },
     {
       key: 'absolute-paths',

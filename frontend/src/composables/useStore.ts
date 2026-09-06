@@ -17,6 +17,7 @@ export interface Category {
 export interface StoreSettings {
   game_mode: boolean
   absolute_paths: boolean
+  auto_hide: boolean
 }
 
 export interface Store {
@@ -31,7 +32,7 @@ function newStore(): Store {
   return {
     apps: {},
     categories: [],
-    settings: { game_mode: true, absolute_paths: true },
+    settings: { game_mode: true, absolute_paths: true, auto_hide: true },
   }
 }
 
@@ -423,6 +424,11 @@ export function useStore() {
     await save()
   }
 
+  async function setAutoHide(enabled: boolean) {
+    store.value.settings.auto_hide = enabled
+    await save()
+  }
+
   async function setRuntimeMs(guid: string, ms: number) {
     const cleanMs = Math.max(0, Math.floor(ms))
     await SetRuntimeMs(guid, cleanMs)
@@ -515,6 +521,7 @@ export function useStore() {
     updateItem,
     batchUpdateIcons,
     setGameMode,
+    setAutoHide,
     setRuntimeMs,
     setAbsolutePaths,
     convertToAbsolute,
