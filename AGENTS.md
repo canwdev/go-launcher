@@ -134,6 +134,11 @@ targets the clicked tab's guid). Adding a tab action therefore means: entry in `
 
 - Branch `master`; commit subjects follow `feat: ...`, `fix: ...`, `update ...`, `optimize ...`.
   Write descriptive, focused commits; don't bundle unrelated changes.
+- Every `master` push publishes a GitHub Release — `.github/workflows/release.yml`
+  (`windows-latest`, tag `v<frontend/package.json version>-<run number>`, asset `go-launcher.exe`);
+  it runs `bun install --frozen-lockfile` + `bun run build`, then `wails build -clean -s`. Bump
+  `version` in `frontend/package.json` to change the release version. The Wails CLI version there
+  is pinned to the `go.mod` wails version — bump both together.
 - Do not commit runtime data or build output: `.go-launcher-data/`, `build/bin/`,
   `frontend/dist/`, `node_modules/`, `*.exe`, `*.log` (see the repo root `.gitignore`).
 - Frontend style is enforced by ESLint (2-space indent, single quotes, no semicolons); run

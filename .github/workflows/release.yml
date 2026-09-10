@@ -1,0 +1,121 @@
+name: Release
+
+# 每次 push 到 master 自动构建并发 Release（附件 go-launcher.exe）。
+# 只构建 windows/amd64：这个 launcher 基于 Wails + WebView2，不做跨平台。
+on:
+  push:
+    branches:
+      - master
+  # 也可以在 Actions 页面手动 Run workflow 重新发一版
+  workflow_dispatch:
+
+# 创建 tag / release 需要写权限，默认的 GITHUB_TOKEN 足够
+permissions:
+  contents: write
+
+# 串行执行，避免两次 push 抢同一个 release；不取消已开始的发布会话
+concurrency:
+  group: release-master
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Build go-launcher.exe and publish release
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          # Wails 构建时会读取 git 信息，取全量历史更稳妥
+          fetch-depth: 0
+
+      - name: Read version from frontend/package.json
+        id: version
+        shell: pwsh
+        run: |
+          $version = (Get-Content 'frontend/package.json' -Raw | ConvertFrom-Json).version
+          if ([string]::IsNullOrWhiteSpace($version)) { throw 'frontend/package.json has no version field' }
+          # tag = v<package.json version>-<GitHub run number>，例如 v0.1.2-42
+          $tag = 'v{0}-{1}' -f $version, '${{ github.run_number }}'
+          "version=$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+          "tag=$tag" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+          "release tag: $tag"
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          # 直接跟随 go.mod 的 go 指令（当前 1.26.2），不用手动同步
+          go-version-file: go.mod
+          cache: true
+
+      - name: Set up bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install Wails CLI
+        # 与 go.mod 里的 github.com/wailsapp/wails/v2 版本保持一致，
+        # 避免 CLI 与库版本不一致（升级 wails 时两处一起改）
+        run: go install github.com/wailsapp/wails/v2/cmd/wails@v2.15.0
+
+      - name: Build frontend
+        working-directory: frontend
+        run: |
+          bun install --frozen-lockfile
+          bun run build
+
+      - name: Build go-launcher.exe
+        # -s：前端已在上一步构建完成（frontend/dist 由 main.go 的 //go:embed 打进二进制）
+        # -trimpath：不把 runner 上的绝对路径写进二进制
+        run: wails build -clean -s -trimpath -platform windows/amd64
+
+      - name: Check the built binary
+        id: artifact
+        shell: pwsh
+        run: |
+          $exe = 'build/bin/go-launcher.exe'
+          if (-not (Test-Path $exe)) { throw "build produced no $exe" }
+          $item = Get-Item $exe
+          $hash = (Get-FileHash $exe -Algorithm SHA256).Hash
+          "size   = $($item.Length) bytes"
+          "sha256 = $hash"
+          "sha256=$hash" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+
+      # 即使 Release 步骤失败，产物也留在 Actions 里可下载
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: go-launcher-${{ steps.version.outputs.tag }}
+          path: build/bin/go-launcher.exe
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Create release
+        uses: softprops/action-gh-release@v2
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          tag_name: ${{ steps.version.outputs.tag }}
+          name: go-launcher ${{ steps.version.outputs.tag }}
+          # 让 tag 指向本次 push 的 commit
+          target_commitish: ${{ github.sha }}
+          make_latest: true
+          draft: false
+          prerelease: false
+          # 附件名固定为 go-launcher.exe
+          files: build/bin/go-launcher.exe
+          fail_on_unmatched_files: true
+          # 自动附带由 commit 生成的 changelog
+          generate_release_notes: true
+          body: |
+            Automated build of `master` — `${{ github.sha }}` ([run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}))
+
+            - **Asset:** `go-launcher.exe` — single-file Windows x64 build with the frontend bundled in; download and run
+            - **Version:** `${{ steps.version.outputs.version }}` (from `frontend/package.json`) + build ${{ github.run_number }}
+            - **SHA256:** `${{ steps.artifact.outputs.sha256 }}`
+            - **Requires:** the WebView2 runtime (preinstalled on Windows 10/11)
+
+# 备注：
+# - 版本号取自 frontend/package.json 的 version（发版前手动往上抬），tag 形如 v0.1.2-42，
+#   其中 42 是 GitHub 的 run number，保证同一 version 下每个 commit 都有独立 tag。
+# - 每次 push 都会新建一个 release（每个 tag 一次）；只想在打 tag 时发布的话，
+#   把 on.push 换成 on.push.tags: ['v*']。

@@ -40,6 +40,16 @@ wails build
 
 The binary is produced at `build/bin/go-launcher.exe` and copied to `go-launcher.exe`.
 
+## Releases
+
+Every push to `master` runs [`.github/workflows/release.yml`](./.github/workflows/release.yml)
+on `windows-latest`: it installs the Wails CLI, builds the frontend with bun, runs
+`wails build`, then publishes a GitHub Release tagged
+`v<version from frontend/package.json>-<run number>` (e.g. `v0.1.2-42`) with `go-launcher.exe`
+attached (Windows x64 only — this app is Wails + WebView2, no cross-platform build). Bump
+`version` in `frontend/package.json` when you want a new release version. Manual runs are
+possible from the Actions tab (`workflow_dispatch`).
+
 ## Data file
 
 Everything the launcher knows is kept in `.go-launcher-data/go-launcher-data.json`
