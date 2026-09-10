@@ -15,6 +15,8 @@ export interface ItemEditFields {
   args: string
   working_dir: string
   icon: string
+  /** 以管理员身份启动（Windows 弹 UAC），随 store 持久化 */
+  run_as_admin: boolean
 }
 
 /**

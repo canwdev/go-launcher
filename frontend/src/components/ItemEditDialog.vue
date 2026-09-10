@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { AppItem } from '../api'
+import { ShieldCheck } from '@lucide/vue'
 import { ref, watch } from 'vue'
 import { PickDirectory, PickFile, PickImageFile } from '../api'
 import AppDialog from './AppDialog.vue'
@@ -15,7 +16,7 @@ const props = withDefaults(defineProps<{
 
 const emit = defineEmits<{
   close: []
-  save: [guid: string, fields: { name: string, path: string, args: string, working_dir: string, icon: string }]
+  save: [guid: string, fields: { name: string, path: string, args: string, working_dir: string, icon: string, run_as_admin: boolean }]
 }>()
 
 const name = ref('')
@@ -23,6 +24,8 @@ const path = ref('')
 const args = ref('')
 const workingDir = ref('')
 const icon = ref('')
+// 勾选后该 item 始终以管理员身份启动（Windows 弹 UAC），随 store 持久化
+const runAsAdmin = ref(false)
 
 watch(
   () => [props.open, props.item, props.creating] as const,
@@ -36,6 +39,7 @@ watch(
       args.value = ''
       workingDir.value = ''
       icon.value = ''
+      runAsAdmin.value = false
       return
     }
     name.value = props.item.name ?? ''
@@ -43,6 +47,7 @@ watch(
     args.value = props.item.args ?? ''
     workingDir.value = props.item.working_dir ?? ''
     icon.value = props.item.icon ?? ''
+    runAsAdmin.value = props.item.run_as_admin ?? false
   },
 )
 
@@ -77,6 +82,7 @@ function onSave() {
     args: args.value.trim(),
     working_dir: workingDir.value.trim(),
     icon: icon.value.trim(),
+    run_as_admin: runAsAdmin.value,
   })
   emit('close')
 }
@@ -141,6 +147,18 @@ function onSave() {
             Browse…
           </button>
         </div>
+      </label>
+
+      <label class="flex items-center gap-2">
+        <input
+          v-model="runAsAdmin" type="checkbox"
+          class="h-3.5 w-3.5 shrink-0 accent-blue-500"
+        >
+        <span class="inline-flex items-center gap-1 text-xs text-gray-600 dark:text-gray-300">
+          <ShieldCheck class="h-3.5 w-3.5 text-amber-500" />
+          Run as administrator
+        </span>
+        <span class="text-[11px] text-gray-400 dark:text-gray-500">UAC prompt on launch</span>
       </label>
 
       <label class="flex flex-col gap-1">

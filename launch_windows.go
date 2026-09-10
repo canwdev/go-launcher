@@ -101,10 +101,34 @@ func joinArgsForShell(args []string) string {
 	return strings.Join(parts, " ")
 }
 
+// launchVerb 返回 ShellExecuteEx 使用的动词：item 勾选“Run as administrator”时
+// 固定 "runas"（系统弹 UAC 提权），否则用默认的 "open"（仅在程序自身要求提权时
+// 才回退到 runas，见 startProcess）。
+func launchVerb(elevated bool) string {
+	if elevated {
+		return "runas"
+	}
+	return "open"
+}
+
 // startProcess launches path with args in workDir via ShellExecuteEx and
 // returns the process handle; the caller decides how to wait/cleanup.
-func startProcess(path string, args []string, workDir string) (windows.Handle, error) {
-	h, err := shellExecuteEx("open", path, joinArgsForShell(args), workDir)
+//
+// elevated=true（item 勾选了“Run as administrator”）时固定用 "runas" 动词，由系统
+// 弹 UAC 提权；否则先用 "open"，只有在程序自身要求提权等情况下才回退到 "runas"。
+func startProcess(path string, args []string, workDir string, elevated bool) (windows.Handle, error) {
+	if elevated {
+		h, err := shellExecuteEx(launchVerb(true), path, joinArgsForShell(args), workDir)
+		if err != nil {
+			// 1223 = ERROR_CANCELLED：用户在 UAC 弹窗点了“否”
+			if errors.Is(err, syscall.Errno(1223)) {
+				return 0, errors.New("elevation was cancelled")
+			}
+			return 0, err
+		}
+		return h, nil
+	}
+	h, err := shellExecuteEx(launchVerb(false), path, joinArgsForShell(args), workDir)
 	if err != nil {
 		if errors.Is(err, syscall.Errno(1223)) || errors.Is(err, syscall.Errno(5)) {
 			return 0, err
@@ -120,8 +144,8 @@ func startProcess(path string, args []string, workDir string) (windows.Handle, e
 // startUntracked launches path without returning a process handle, so nothing
 // can Stop or time it. The shell-executed process keeps running after the
 // handle is released.
-func startUntracked(path string, args []string, workDir string) error {
-	h, err := startProcess(path, args, workDir)
+func startUntracked(path string, args []string, workDir string, elevated bool) error {
+	h, err := startProcess(path, args, workDir, elevated)
 	if err != nil {
 		return err
 	}
@@ -129,8 +153,8 @@ func startUntracked(path string, args []string, workDir string) error {
 	return nil
 }
 
-func startTracked(path string, args []string, workDir string, proc *runningProc) error {
-	h, err := startProcess(path, args, workDir)
+func startTracked(path string, args []string, workDir string, elevated bool, proc *runningProc) error {
+	h, err := startProcess(path, args, workDir, elevated)
 	if err != nil {
 		return err
 	}

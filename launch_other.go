@@ -28,8 +28,9 @@ func revealFile(path string) error {
 }
 
 // startProcess launches path with args in workDir and returns the running
-// command; the caller decides how to wait/cleanup.
-func startProcess(path string, args []string, workDir string) (*exec.Cmd, error) {
+// command; the caller decides how to wait/cleanup. elevated（以管理员身份启动）
+// 是 Windows 专有概念，其他平台忽略该标志。
+func startProcess(path string, args []string, workDir string, _ bool) (*exec.Cmd, error) {
 	cmd := exec.Command(path, args...)
 	if workDir != "" {
 		cmd.Dir = workDir
@@ -43,8 +44,8 @@ func startProcess(path string, args []string, workDir string) (*exec.Cmd, error)
 // startUntracked launches path without returning a process handle, so nothing
 // can Stop or time it. The child is reaped in the background so it does not
 // become a zombie.
-func startUntracked(path string, args []string, workDir string) error {
-	cmd, err := startProcess(path, args, workDir)
+func startUntracked(path string, args []string, workDir string, elevated bool) error {
+	cmd, err := startProcess(path, args, workDir, elevated)
 	if err != nil {
 		return err
 	}
@@ -54,8 +55,8 @@ func startUntracked(path string, args []string, workDir string) error {
 	return nil
 }
 
-func startTracked(path string, args []string, workDir string, proc *runningProc) error {
-	cmd, err := startProcess(path, args, workDir)
+func startTracked(path string, args []string, workDir string, elevated bool, proc *runningProc) error {
+	cmd, err := startProcess(path, args, workDir, elevated)
 	if err != nil {
 		return err
 	}

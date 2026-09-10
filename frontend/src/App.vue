@@ -35,6 +35,7 @@ const {
   refresh,
   setGameMode,
   setAutoHide,
+  setAlwaysOnTop,
   setAbsolutePaths,
   duplicateItem,
   moveItemToTab,
@@ -140,7 +141,7 @@ async function onRefresh() {
   await refresh()
   showToast('Data refreshed')
 }
-function onOpenProgramDir() {
+function onOpenDataDir() {
   OpenDirectory('').catch(showError)
 }
 function onBatchUpdateIcons() {
@@ -155,10 +156,12 @@ const appMenuItems = buildAppMenu({
   toggleGameMode: () => setGameMode(!store.value.settings.game_mode),
   getAutoHide: () => store.value.settings.auto_hide,
   toggleAutoHide: () => setAutoHide(!store.value.settings.auto_hide),
+  getAlwaysOnTop: () => store.value.settings.always_on_top,
+  toggleAlwaysOnTop: () => setAlwaysOnTop(!store.value.settings.always_on_top),
   getAbsolutePaths: () => store.value.settings.absolute_paths,
   toggleAbsolutePaths: () => setAbsolutePaths(!store.value.settings.absolute_paths),
   onRefresh,
-  onOpenProgramDir,
+  onOpenDataDir,
   onConvertAbsolute: () => convertToAbsolute(),
   onConvertRelative: () => convertToRelative(),
   onBatchUpdateIcons,
@@ -211,7 +214,7 @@ function searchLocate(guid: string, tabGuid: string) {
     <TabBar
       :tabs="store.categories" :active-guid="activeTab?.guid ?? ''" :drag-item-guid="dragItemGuid"
       @add="storeApi.addTab().catch(showError)"
-      @select="storeApi.setActiveTab" @rename="dialogs.openTabRename" @remove="dialogs.onDeleteTabRequested" @reorder="storeApi.moveTab"
+      @select="storeApi.setActiveTab" @rename="dialogs.openTabRename" @duplicate="storeApi.duplicateTab" @remove="dialogs.onDeleteTabRequested" @reorder="storeApi.moveTab"
       @item-drop="onItemDropOnTab"
     >
       <div class="flex flex-1 items-center justify-end gap-1">

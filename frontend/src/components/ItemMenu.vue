@@ -26,13 +26,44 @@ const { onMenuButtonClick, onMenuOpenAt, menuPosition } = useMenuFlip({ estimate
 const btnWrapRef = ref<HTMLElement | null>(null)
 // 右键程序化打开时跳过按钮坐标覆盖（锚点已由鼠标位置设定）
 let skipButtonAnchor = false
+// 右键时跳过随后合成的 click：菜单已开时右键触发器会先 close、此处再 return，
+// 避免 click 又把菜单重新打开（菜单开着时右键触发器应关闭菜单）
+let suppressNextButtonClick = false
 
 function onBtnClick(e: MouseEvent) {
+  if (suppressNextButtonClick) {
+    suppressNextButtonClick = false
+    return
+  }
   if (skipButtonAnchor) {
     skipButtonAnchor = false
     return
   }
   onMenuButtonClick(e)
+}
+
+/**
+ * 触发器的右键：屏蔽原生上下文菜单。菜单开着时先 close 再跳过随后合成的
+ * click（Headless UI 的右键不算外部点击，不处理的话 click 会把它重新打开），
+ * 菜单没开时直接返回，交给外层 @contextmenu 调 open(e) 以鼠标为锚点打开。
+ */
+function onTriggerContextMenu(e: MouseEvent, isOpen: boolean, close: () => void) {
+  e.preventDefault()
+  if (!isOpen)
+    return
+  close()
+  suppressNextButtonClick = true
+}
+
+/** 菜单打开期间点击遮罩：关闭菜单（不触发底层元素的点击） */
+function onOverlayClick(close: () => void) {
+  close()
+}
+
+/** 菜单打开期间在遮罩上右键：同样只关闭菜单，并屏蔽原生上下文菜单 */
+function onOverlayContextMenu(e: MouseEvent, close: () => void) {
+  e.preventDefault()
+  close()
 }
 
 /** 以鼠标位置为锚点程序化打开菜单（供 item 右键调用）；不传事件则用按钮定位 */
@@ -50,7 +81,7 @@ defineExpose({ open })
 </script>
 
 <template>
-  <Menu v-slot="{ open }" as="div" class="relative">
+  <Menu v-slot="{ open: isOpen, close }" as="div" class="relative">
     <div ref="btnWrapRef" data-item-menu-btn class="inline-block">
       <MenuButton
         :class="[
@@ -58,7 +89,7 @@ defineExpose({ open })
           disabled ? 'cursor-not-allowed opacity-50 disabled:hover:bg-transparent dark:disabled:hover:bg-transparent' : '',
         ]"
         :disabled="disabled"
-        @click.stop="onBtnClick"
+        @click.stop="onBtnClick" @contextmenu="onTriggerContextMenu($event, isOpen, close)"
       >
         <slot name="button" />
       </MenuButton>
@@ -66,7 +97,10 @@ defineExpose({ open })
     <Teleport to="body">
       <!-- 全屏透明遮罩：菜单打开期间，点击任意处仅关闭菜单，不触发 item 的点击执行。
            遮罩是 body 直接子元素，点击事件不会冒泡到 item 卡片。 -->
-      <div v-if="open" class="fixed inset-0 z-40" @contextmenu.prevent />
+      <div
+        v-if="isOpen" class="fixed inset-0 z-40" @click="onOverlayClick(close)"
+        @contextmenu="onOverlayContextMenu($event, close)"
+      />
       <MenuItems
         class="overflow-y-auto rounded border border-gray-300 bg-white py-1 shadow-md focus:outline-none dark:border-gray-700 dark:bg-gray-800" :class="[widthClass]"
         :style="menuPosition(align)"

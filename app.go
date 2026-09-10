@@ -30,6 +30,10 @@ type AppItem struct {
 	RuntimeMs  int64  `json:"runtime_ms,omitempty"`
 	Args       string `json:"args,omitempty"`
 	WorkingDir string `json:"working_dir,omitempty"`
+	// RunAsAdmin 来自 item 编辑弹窗的“Run as administrator”勾选：为 true 时始终
+	// 以管理员身份启动（Windows 走 ShellExecuteEx 的 "runas" 动词，系统弹 UAC）；
+	// 为 false 时仅在程序自身要求提权（ERROR_ELEVATION_REQUIRED）时才回退到 runas。
+	RunAsAdmin bool `json:"run_as_admin,omitempty"`
 }
 
 type CategoryNode struct {
@@ -45,6 +49,9 @@ type Settings struct {
 	// launcher（Game mode 的跟踪进程结束后自动恢复窗口）；关闭时启动不做任何
 	// 最小化，Game mode 的最小化与自动恢复逻辑同样失效（跟踪/计时不受影响）。
 	AutoHide bool `json:"auto_hide"`
+	// AlwaysOnTop 让窗口始终置顶（全局菜单“窗口置顶”）。开启后在 startup 中通过
+	// WindowSetAlwaysOnTop 恢复，切换时由 SetAlwaysOnTop 立即应用并持久化。
+	AlwaysOnTop bool `json:"always_on_top"`
 }
 
 type AppStore struct {
@@ -82,7 +89,7 @@ type runningProc struct {
 	cleanup func()
 }
 
-const dataDir = "go-launcher-data"
+const dataDir = ".go-launcher-data"
 
 const saveFile = dataDir + "/go-launcher-data.json"
 
@@ -151,7 +158,7 @@ func defaultStore() AppStore {
 		Categories: []CategoryNode{
 			{GUID: uuid.NewString(), Name: "Default", Slots: []*string{}},
 		},
-		Settings: Settings{GameMode: true, AbsolutePaths: true, AutoHide: true},
+		Settings: Settings{GameMode: true, AbsolutePaths: true, AutoHide: true, AlwaysOnTop: false},
 	}
 }
 
@@ -172,14 +179,13 @@ func settingsMissingKey(data []byte, key string) bool {
 	return !ok
 }
 
-func loadStore() AppStore {
-	data, err := os.ReadFile(saveFile)
-	if err != nil {
-		return defaultStore()
-	}
+// parseStore 解析 store JSON，并补齐默认值 / 迁移旧文件（game_mode、auto_hide
+// 缺省、guid/name/slots 兜底、路径规范化）。ok=false 表示内容不是合法 JSON：
+// 手动编辑写坏的中间状态不应被当成"空 store"覆盖内存数据。
+func parseStore(data []byte) (AppStore, bool) {
 	var store AppStore
 	if err := json.Unmarshal(data, &store); err != nil {
-		return defaultStore()
+		return AppStore{}, false
 	}
 	// Files predating the game_mode key (renamed from auto_minimize) carry no
 	// game_mode setting; default it to ON so the runtime display stays visible
@@ -196,7 +202,7 @@ func loadStore() AppStore {
 		store.Apps = map[string]*AppItem{}
 	}
 	if len(store.Apps) == 0 && len(store.Categories) == 0 {
-		return defaultStore()
+		return defaultStore(), true
 	}
 	for guid, app := range store.Apps {
 		if app == nil {
@@ -225,32 +231,52 @@ func loadStore() AppStore {
 			cat.Slots = []*string{}
 		}
 	}
+	return store, true
+}
+
+func loadStore() AppStore {
+	data, err := os.ReadFile(saveFile)
+	if err != nil {
+		return defaultStore()
+	}
+	store, ok := parseStore(data)
+	if !ok {
+		return defaultStore()
+	}
 	return store
 }
 
-func writeStoreAtomic(store AppStore) error {
+// writeStoreAtomic 原子写入 store，并返回写出的字节（供调用方记录文件指纹，
+// 让外部改动监听能识别出这是自己的写入）。
+func writeStoreAtomic(store AppStore) ([]byte, error) {
 	data, err := json.MarshalIndent(store, "", "  ")
 	if err != nil {
-		return err
+		return nil, err
 	}
 	tmp := saveFile + ".tmp"
 	if err := os.WriteFile(tmp, data, 0644); err != nil {
-		return err
+		return nil, err
 	}
-	return os.Rename(tmp, saveFile)
+	if err := os.Rename(tmp, saveFile); err != nil {
+		return nil, err
+	}
+	return data, nil
 }
 
 func (a *App) findItem(guid string) *AppItem {
 	return a.store.Apps[guid]
 }
 
-func openFile(path string, args []string, workDir string) error {
+// openFile 打开/启动一个路径。elevated（item 勾选了“Run as administrator”）时
+// 走提权启动；可执行文件走真正的进程启动（startUntracked），其余文件交给系统默认
+// 处理程序。
+func openFile(path string, args []string, workDir string, elevated bool) error {
 	// Executables are launched through the real process-run mechanism
 	// (startUntracked) with the frontend-supplied args and working directory,
 	// but without full tracking: no process handle is kept for Stop and no
 	// runtime is accumulated.
-	if isExecutable(path) {
-		return startUntracked(path, args, workDir)
+	if isExecutable(path) || elevated {
+		return startUntracked(path, args, workDir, elevated)
 	}
 	return openWithDefaultHandler(path)
 }
@@ -262,6 +288,13 @@ type App struct {
 	runtimeStats map[string]int64
 	running      map[string]*runningProc
 	iconCache    map[string]string
+
+	// 外部改动监听（用户手动编辑 go-launcher-data.json 后自动生效），见
+	// store_watch.go。storeFile 是 saveFile 最近一次已知的磁盘状态。
+	storeFile     storeFileState
+	watchStop     chan struct{}
+	watchStart    sync.Once
+	watchStopOnce sync.Once
 }
 
 func NewApp() *App {
@@ -271,6 +304,7 @@ func NewApp() *App {
 		runtimeStats: map[string]int64{},
 		running:      map[string]*runningProc{},
 		iconCache:    map[string]string{},
+		watchStop:    make(chan struct{}),
 	}
 	// Seed in-memory runtime stats from the persisted store so GetData/buildState
 	// return the real accumulated time on startup instead of 0 (which previously
@@ -281,6 +315,8 @@ func NewApp() *App {
 		}
 	}
 	app.pruneIconFiles()
+	// 记住启动时磁盘上的内容，避免监听把刚读进来的文件当成外部改动。
+	app.syncStoreFileState()
 	return app
 }
 
@@ -291,12 +327,18 @@ func (a *App) startup(ctx context.Context) {
 	// options; the position cannot be, because Wails centres the window on
 	// creation, so it is corrected here once the window exists.
 	applyRestoredWindowState(ctx)
+	// 恢复上次的窗口置顶设置（全局菜单“窗口置顶”）。
+	applyAlwaysOnTop(ctx, a.store.Settings.AlwaysOnTop)
+	// 监听 .go-launcher-data/go-launcher-data.json 的外部改动（用户手动编辑后
+	// 自动读取并推送给前端）。
+	a.startStoreWatcher()
 	// Frontend drives its own 30s display refresh (useAutoRuntime); the old
 	// backend 30s state tick was redundant and has been removed. State is still
 	// pushed on launch/stop/icon changes via emitState.
 }
 
 func (a *App) shutdown(_ context.Context) {
+	a.stopStoreWatcher()
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	a.writeStore()
@@ -372,16 +414,25 @@ func (a *App) buildState() map[string]ItemState {
 	return state
 }
 
+// writeStore 把内存 store（含 runtimeStats 的最新累计值）写入磁盘，并记录写出的
+// 文件指纹，使外部改动监听不会把自己的写入当成用户的手动编辑。调用方必须持有 a.mu。
 func (a *App) writeStore() {
 	for guid, ms := range a.runtimeStats {
 		if app := a.store.Apps[guid]; app != nil {
 			app.RuntimeMs = ms
 		}
 	}
-	_ = writeStoreAtomic(a.store)
+	data, err := writeStoreAtomic(a.store)
+	if err != nil {
+		return
+	}
+	a.rememberStoreFile(data)
 }
 
+// GetData 返回当前 store 与运行状态。读取前先做一次外部改动检查，这样用户手动
+// 编辑文件后（即使监听事件还没处理完）任何一次读取都能拿到新数据。
 func (a *App) GetData() AppData {
+	a.reloadStoreIfChanged()
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	return AppData{Store: a.store, State: a.buildState()}
@@ -623,9 +674,29 @@ func (a *App) PickDirectory(initialDir string) (string, error) {
 	return a.pickToStored(picked), nil
 }
 
+// applyAlwaysOnTop 把置顶状态应用到窗口。ctx 为空（startup 之前的调用）时直接
+// 忽略：窗口还不存在，启动后会由 startup 重新应用一次。
+func applyAlwaysOnTop(ctx context.Context, onTop bool) {
+	if ctx == nil {
+		return
+	}
+	runtime.WindowSetAlwaysOnTop(ctx, onTop)
+}
+
+// SetAlwaysOnTop 切换窗口置顶（全局菜单“窗口置顶”）：立即应用到窗口并写入
+// store（前端也会把同一个开关随 SaveData 一起持久化，重复写入无害）。
+func (a *App) SetAlwaysOnTop(onTop bool) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	a.store.Settings.AlwaysOnTop = onTop
+	applyAlwaysOnTop(a.ctx, onTop)
+	a.writeStore()
+}
+
 func (a *App) OpenDirectory(path string) error {
 	if path == "" {
-		path = absBase
+		_ = os.MkdirAll(filepath.Join(absBase, dataDir), 0755)
+		path = filepath.Join(absBase, dataDir)
 	}
 	info, err := os.Stat(path)
 	if err != nil {
@@ -755,6 +826,7 @@ func (a *App) launch(guid string) error {
 	}
 	gameMode := a.store.Settings.GameMode
 	autoHide := a.store.Settings.AutoHide
+	runAsAdmin := item.RunAsAdmin
 	workingDir := ""
 	if item.WorkingDir != "" {
 		workingDir = absPath(item.WorkingDir)
@@ -768,7 +840,7 @@ func (a *App) launch(guid string) error {
 		if workingDir == "" {
 			return nil
 		}
-		if err := openFile(workingDir, nil, ""); err != nil {
+		if err := openFile(workingDir, nil, "", false); err != nil {
 			return err
 		}
 		// Auto-hide 总开关开启：打开目录也直接最小化 launcher，无自动恢复
@@ -784,7 +856,7 @@ func (a *App) launch(guid string) error {
 	// Game mode off: plain open only - no tracking, no timing. Auto-hide 开启时
 	// 直接最小化 launcher，因未跟踪进程故不会自动恢复窗口。
 	if !gameMode {
-		if err := openFile(path, args, workingDir); err != nil {
+		if err := openFile(path, args, workingDir, runAsAdmin); err != nil {
 			return err
 		}
 		a.minimiseIfAutoHide(autoHide)
@@ -793,7 +865,7 @@ func (a *App) launch(guid string) error {
 
 	if isExecutable(path) {
 		p := &runningProc{}
-		if err := startTracked(path, args, workingDir, p); err != nil {
+		if err := startTracked(path, args, workingDir, runAsAdmin, p); err != nil {
 			return err
 		}
 		a.mu.Lock()
@@ -824,7 +896,7 @@ func (a *App) launch(guid string) error {
 		}()
 		return nil
 	}
-	if err := openFile(path, args, workingDir); err != nil {
+	if err := openFile(path, args, workingDir, runAsAdmin); err != nil {
 		return err
 	}
 	a.minimiseIfAutoHide(autoHide)
@@ -856,6 +928,7 @@ func (a *App) Open(guid string) error {
 		return fmt.Errorf("invalid item guid %q", guid)
 	}
 	autoHide := a.store.Settings.AutoHide
+	runAsAdmin := item.RunAsAdmin
 	args := splitArgs(item.Args)
 	workDir := ""
 	if item.WorkingDir != "" {
@@ -868,13 +941,13 @@ func (a *App) Open(guid string) error {
 		if workDir == "" {
 			return nil
 		}
-		if err := openFile(workDir, nil, ""); err != nil {
+		if err := openFile(workDir, nil, "", false); err != nil {
 			return err
 		}
 		a.minimiseIfAutoHide(autoHide)
 		return nil
 	}
-	if err := openFile(resolveLaunchPath(item.Path), args, workDir); err != nil {
+	if err := openFile(resolveLaunchPath(item.Path), args, workDir, runAsAdmin); err != nil {
 		return err
 	}
 	a.minimiseIfAutoHide(autoHide)

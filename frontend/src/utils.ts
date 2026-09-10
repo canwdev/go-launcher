@@ -39,18 +39,29 @@ export function randomUUID(): string {
   })
 }
 
-export function debounce<T extends (...args: never[]) => unknown>(fn: T, delay: number): (...args: Parameters<T>) => void {
+export type Debounced<A extends unknown[]> = ((...args: A) => void) & {
+  /** 取消尚未触发的调用（例如外部改动重载后要丢弃待落盘的本地数据） */
+  cancel: () => void
+}
+
+export function debounce<T extends (...args: never[]) => unknown>(fn: T, delay: number): Debounced<Parameters<T>> {
   let timer: number | undefined
-  return (...args) => {
+  const debounced = (...args: Parameters<T>) => {
     if (timer)
       window.clearTimeout(timer)
     timer = window.setTimeout(fn as () => void, delay, ...args)
   }
+  debounced.cancel = () => {
+    if (timer)
+      window.clearTimeout(timer)
+    timer = undefined
+  }
+  return debounced
 }
 
 export function isAutoIcon(icon: string | undefined): boolean {
   if (!icon)
     return true
   const norm = icon.replace(/\\/g, '/')
-  return norm.includes('go-launcher-data/cached-icons/')
+  return norm.includes('.go-launcher-data/cached-icons/')
 }

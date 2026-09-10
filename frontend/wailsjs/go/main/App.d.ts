@@ -34,6 +34,8 @@ export function Reveal(arg1:string):Promise<void>;
 
 export function SaveData(arg1:main.AppStore):Promise<void>;
 
+export function SetAlwaysOnTop(arg1:boolean):Promise<void>;
+
 export function SetRuntimeMs(arg1:string,arg2:number):Promise<void>;
 
 export function Stop(arg1:string):Promise<void>;

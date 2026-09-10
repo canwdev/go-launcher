@@ -66,6 +66,10 @@ export function SaveData(arg1) {
   return window['go']['main']['App']['SaveData'](arg1);
 }
 
+export function SetAlwaysOnTop(arg1) {
+  return window['go']['main']['App']['SetAlwaysOnTop'](arg1);
+}
+
 export function SetRuntimeMs(arg1, arg2) {
   return window['go']['main']['App']['SetRuntimeMs'](arg1, arg2);
 }

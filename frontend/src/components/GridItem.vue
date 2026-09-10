@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { AppItem } from '../api'
-import { Ellipsis } from '@lucide/vue'
+import { Ellipsis, ShieldCheck } from '@lucide/vue'
 import { computed, ref } from 'vue'
 import { ConvertItemToAbsolute, ConvertItemToRelative, Reveal, UpdateIcon } from '../api'
 import { buildItemMenu, buildSlotMenu } from '../composables/itemMenu'
@@ -192,7 +192,10 @@ function onDragEnd() {
     </div>
 
     <!-- 标题 -->
-    <span class="mt-1.5 w-full truncate text-center text-xs text-gray-700 dark:text-gray-200">{{ item.name }}</span>
+    <span class="mt-1.5 flex w-full items-center justify-center gap-1 text-xs text-gray-700 dark:text-gray-200">
+      <ShieldCheck v-if="item.run_as_admin" class="h-3 w-3 shrink-0 text-amber-500" />
+      <span class="truncate">{{ item.name }}</span>
+    </span>
   </div>
 
   <!-- 空槽 -->

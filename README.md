@@ -10,6 +10,10 @@
 A minimal [Wails](https://wails.io/) desktop launcher app for Go. It opens a
 window listing files/programs (with icons and accumulated runtime), letting you
 run/stop them, drag & drop to add more, and manage entries via a per-item menu.
+Each item can be launched as administrator (check *Run as administrator* in the item
+editor — it is stored in the data file and shows a shield marker; Windows asks for UAC).
+Launcher data lives in `.go-launcher-data/go-launcher-data.json`; edit that file by
+hand and the running app reloads it automatically (see [Data file](#data-file)).
 
 ## Requirements
 
@@ -36,14 +40,30 @@ wails build
 
 The binary is produced at `build/bin/go-launcher.exe` and copied to `go-launcher.exe`.
 
+## Data file
+
+Everything the launcher knows is kept in `.go-launcher-data/go-launcher-data.json`
+(next to the working directory of the executable):
+
+- `apps` — global item pool (`guid` / `name` / `path` / `icon` / `args` / `working_dir` / `runtime_ms` / `run_as_admin`)
+- `categories` — the tabs, each with a `slots` array of app guids (`null` = empty grid cell)
+- `settings` — `game_mode` / `auto_hide` / `always_on_top` / `absolute_paths`
+
+The file is watched while the app runs (a Windows directory watch — no polling): save a manual
+edit and the launcher applies it right away and refreshes the window. A file that is not valid
+JSON is ignored (the current data stays loaded) and a warning is shown; deleting the file is also
+ignored, and removing an item stops tracking it. `Refresh` in the app menu re-reads the file
+immediately (on every platform), and the store is written back on every change and on exit.
+
 ## Structure
 
 - `main.go` — Wails app bootstrap (`wails.Run`, embeds `frontend/dist`)
 - `app.go` — the `App` struct with the methods bound to the frontend (add/remove/rename, run/stop, icons, etc.) plus the launcher data persistence
+- `store_watch.go`, `store_watch_windows.go`, `store_watch_other.go` — watch `go-launcher-data.json` for manual (external) edits and reload the store
 - `frontend/` — **Vite + Vue 3 + TypeScript + Tailwind CSS + Headless UI** frontend, managed with bun
   - `src/api.ts` — typed wrappers around the generated `wailsjs` Go bindings
-  - `src/composables/useLauncher.ts` — reactive item list, Wails events & file drop
-  - `src/components/` — `LauncherRow` (Headless UI `Menu`), `ModalDialog` (Headless UI `Dialog`)
+  - `src/composables/useStore.ts` — reactive item list, store persistence, Wails events & file drop
+  - `src/components/` — `LauncherRow` / `GridItem` item views, `AppDialog` (Headless UI `Dialog`), `ItemMenu`, `TabBar`, dialogs
   - `eslint.config.mjs` — [@antfu/eslint-config](https://github.com/antfu/eslint-config)
   - scripts: `bun run dev` / `build` / `typecheck` / `lint` / `lint:fix`
 - `utils.go`, `launch_*.go`, `icon_*.go` — platform helpers (path normalization, process launching, icon extraction)

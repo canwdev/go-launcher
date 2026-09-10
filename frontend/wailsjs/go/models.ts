@@ -8,6 +8,7 @@ export namespace main {
 	    runtime_ms?: number;
 	    args?: string;
 	    working_dir?: string;
+	    run_as_admin?: boolean;
 	
 	    static createFrom(source: any = {}) {
 	        return new AppItem(source);
@@ -22,6 +23,7 @@ export namespace main {
 	        this.runtime_ms = source["runtime_ms"];
 	        this.args = source["args"];
 	        this.working_dir = source["working_dir"];
+	        this.run_as_admin = source["run_as_admin"];
 	    }
 	}
 	export class AddResult {
@@ -78,6 +80,7 @@ export namespace main {
 	    game_mode: boolean;
 	    absolute_paths: boolean;
 	    auto_hide: boolean;
+	    always_on_top: boolean;
 	
 	    static createFrom(source: any = {}) {
 	        return new Settings(source);
@@ -88,6 +91,7 @@ export namespace main {
 	        this.game_mode = source["game_mode"];
 	        this.absolute_paths = source["absolute_paths"];
 	        this.auto_hide = source["auto_hide"];
+	        this.always_on_top = source["always_on_top"];
 	    }
 	}
 	export class CategoryNode {

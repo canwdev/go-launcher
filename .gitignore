@@ -1,6 +1,6 @@
 *.exe
 *.exe~
-/go-launcher-data
+/.go-launcher-data
 /build/bin
 node_modules
 /frontend/dist

@@ -1,5 +1,5 @@
 import type { MenuEntry } from './composables/itemMenu'
-import { ExternalLink, FilePlus2, FolderOpen, Gamepad2, Images, RefreshCw } from '@lucide/vue'
+import { ExternalLink, FilePlus2, FolderOpen, Gamepad2, Images, Pin, RefreshCw } from '@lucide/vue'
 import { BrowserOpenURL } from '../wailsjs/runtime/runtime'
 
 export interface AppMenuCtx {
@@ -7,10 +7,12 @@ export interface AppMenuCtx {
   toggleGameMode: () => void
   getAutoHide: () => boolean
   toggleAutoHide: () => void
+  getAlwaysOnTop: () => boolean
+  toggleAlwaysOnTop: () => void
   getAbsolutePaths: () => boolean
   toggleAbsolutePaths: () => void
   onRefresh: () => void
-  onOpenProgramDir: () => void
+  onOpenDataDir: () => void
   onConvertAbsolute: () => void
   onConvertRelative: () => void
   onBatchUpdateIcons: () => void
@@ -35,6 +37,14 @@ export function buildAppMenu(ctx: AppMenuCtx): MenuEntry[] {
       action: ctx.toggleAutoHide,
     },
     {
+      key: 'always-on-top',
+      toggle: true,
+      icon: Pin,
+      label: 'Always on top',
+      checked: ctx.getAlwaysOnTop,
+      action: ctx.toggleAlwaysOnTop,
+    },
+    {
       key: 'absolute-paths',
       toggle: true,
       label: 'Abs path for new items',
@@ -51,8 +61,8 @@ export function buildAppMenu(ctx: AppMenuCtx): MenuEntry[] {
     {
       key: 'open-dir',
       icon: FolderOpen,
-      label: 'Open program directory...',
-      action: ctx.onOpenProgramDir,
+      label: 'Open data directory...',
+      action: ctx.onOpenDataDir,
     },
     { key: 'divider-1', divider: true },
     {

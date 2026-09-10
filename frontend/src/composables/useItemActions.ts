@@ -1,4 +1,4 @@
-﻿import { Clock, Timer } from '@lucide/vue'
+import { Clock, Timer } from '@lucide/vue'
 import { useTimeoutFn } from '@vueuse/core'
 import { computed, ref } from 'vue'
 import { Launch, Open, Stop } from '../api'

@@ -36,7 +36,7 @@
 
 ## 更换图标后刷新缓存
 
-应用运行时内存图标缓存重启即清空；磁盘缓存 `go-launcher-data/cached-icons/` 不入库。若桌面/任务栏仍显示旧图标，运行以下脚本刷新 Windows 图标缓存：
+应用运行时内存图标缓存重启即清空；磁盘缓存 `.go-launcher-data/cached-icons/` 不入库。若桌面/任务栏仍显示旧图标，运行以下脚本刷新 Windows 图标缓存：
 
 ```powershell
 Remove-Item "$env:LOCALAPPDATA\IconCache.db" -Force -ErrorAction SilentlyContinue
@@ -48,4 +48,4 @@ Start-Process explorer
 ## 仓库提交约定
 
 - **提交**：`build/appicon.svg`、`build/appicon.png`、`build/windows/`（`icon.ico`、`info.json`、`wails.exe.manifest`）、`docs/generate-icon.ps1`、`docs/ICON.md`。
-- **不提交**：`build/bin/`（编译产物）、`go-launcher-data/`（运行时数据）——见 `.gitignore`。
+- **不提交**：`build/bin/`（编译产物）、`.go-launcher-data/`（运行时数据）——见 `.gitignore`。

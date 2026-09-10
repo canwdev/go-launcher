@@ -1,7 +1,7 @@
-﻿<script setup lang="ts">
+<script setup lang="ts">
 import type { MenuEntry } from '../composables/itemMenu'
 import type { Category } from '../composables/useStore'
-import { Ellipsis, PencilLine, Plus, Trash2 } from '@lucide/vue'
+import { Copy, Ellipsis, PencilLine, Plus, Trash2 } from '@lucide/vue'
 import { ref, watch } from 'vue'
 import ItemMenu from './ItemMenu.vue'
 
@@ -16,6 +16,7 @@ const emit = defineEmits<{
   'add': []
   'select': [guid: string]
   'rename': [guid: string, name: string]
+  'duplicate': [guid: string]
   'remove': [guid: string, name: string]
   'reorder': [from: number, to: number]
   'item-drop': [guid: string, tabGuid: string, copy: boolean]
@@ -32,11 +33,21 @@ const overIndex = ref<number | null>(null)
 const itemOverIndex = ref<number | null>(null)
 const itemCopy = ref(false)
 
+// 每个 tab 的菜单实例：右键与省略号按钮共用同一份 entries，右键时以鼠标位置为锚点打开
+const menuRefs = ref<Record<string, InstanceType<typeof ItemMenu> | null>>({})
+
 function tabMenuEntries(tab: Category): MenuEntry[] {
   return [
     { key: 'rename', icon: PencilLine, label: 'Rename', action: () => emit('rename', tab.guid, tab.name) },
+    { key: 'duplicate', icon: Copy, label: 'Duplicate', action: () => emit('duplicate', tab.guid) },
+    { key: 'divider-1', divider: true },
     { key: 'delete', icon: Trash2, label: 'Delete', danger: true, action: () => emit('remove', tab.guid, tab.name) },
   ]
+}
+
+/** tab 右键：只弹出菜单，不切换激活 tab（菜单各项都以该 tab 的 guid 为目标） */
+function onContextMenu(e: MouseEvent, tab: Category) {
+  menuRefs.value[tab.guid]?.open(e)
 }
 
 function onDragStart(index: number) {
@@ -114,7 +125,8 @@ watch(() => props.dragItemGuid, (v) => {
             overIndex === index && dragIndex !== null && overIndex !== dragIndex ? 'ring-2 ring-blue-400' : '',
             itemOverIndex === index && dragItemGuid ? (itemCopy ? 'ring-2 ring-green-500' : 'ring-2 ring-blue-400') : '',
           ]" :title="itemOverIndex === index && dragItemGuid ? (itemCopy ? 'Drop to copy item to this tab' : 'Drop to move item to this tab') : ''"
-          @click="emit('select', tab.guid)" @dragstart="onDragStart(index)" @dragover="onDragOver($event, index)"
+          @click="emit('select', tab.guid)" @click.right.prevent @contextmenu.prevent="onContextMenu($event, tab)"
+          @dragstart="onDragStart(index)" @dragover="onDragOver($event, index)"
           @drop="onDrop($event, index)" @dragend="onDragEnd"
         >
           <span class="text-sm">{{ tab.name }}</span>
@@ -123,19 +135,22 @@ watch(() => props.dragItemGuid, (v) => {
             class="pointer-events-none absolute -right-1.5 -top-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-green-500 text-[11px] font-bold leading-none text-white ring-2 ring-white dark:ring-gray-800"
           >+</span>
 
-          <ItemMenu :entries="tabMenuEntries(tab)" :estimate="100" align="left" width-class="w-32" button-class="flex h-4 w-4 items-center justify-center rounded text-xs opacity-0 hover:bg-white/20 group-hover:opacity-100">
+          <ItemMenu
+            :ref="(el) => { menuRefs[tab.guid] = el as InstanceType<typeof ItemMenu> | null }"
+            :entries="tabMenuEntries(tab)" :estimate="150" align="left" width-class="w-36" button-class="flex h-4 w-4 items-center justify-center rounded text-xs opacity-0 hover:bg-white/20 group-hover:opacity-100"
+          >
             <template #button>
               <Ellipsis class="h-3 w-3" />
             </template>
           </ItemMenu>
         </div>
-          <button
-            key="add-tab"
-            class="flex h-6 w-6 shrink-0 items-center justify-center rounded text-gray-500 hover:bg-gray-200 dark:text-gray-300 dark:hover:bg-gray-700"
-            title="Add Tab" @click="emit('add')"
-          >
-            <Plus class="h-4 w-4" />
-          </button>
+        <button
+          key="add-tab"
+          class="flex h-6 w-6 shrink-0 items-center justify-center rounded text-gray-500 hover:bg-gray-200 dark:text-gray-300 dark:hover:bg-gray-700"
+          title="Add Tab" @click="emit('add')"
+        >
+          <Plus class="h-4 w-4" />
+        </button>
       </TransitionGroup>
     </div>
     <slot />

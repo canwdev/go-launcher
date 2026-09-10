@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { AppItem } from '../api'
-import { Ellipsis } from '@lucide/vue'
+import { Ellipsis, ShieldCheck } from '@lucide/vue'
 import { computed, ref } from 'vue'
 import { ConvertItemToAbsolute, ConvertItemToRelative, Reveal, UpdateIcon } from '../api'
 import { buildItemMenu } from '../composables/itemMenu'
@@ -130,6 +130,9 @@ function onContextMenu(e: MouseEvent) {
     </div>
 
     <span class="min-w-0 flex-1 truncate">{{ item.name }}</span>
+    <span v-if="item.run_as_admin" class="inline-flex shrink-0" title="Runs as administrator">
+      <ShieldCheck class="h-3.5 w-3.5 text-amber-500" />
+    </span>
     <span
       v-if="gameMode" data-runtime-edit class="inline-flex shrink-0 items-center gap-0.5 rounded px-0.5"
       :class="timerActive

@@ -2,7 +2,7 @@ import type { AppData, AppItem, AppStore, ItemState } from '../api'
 import { useStorage } from '@vueuse/core'
 import { onMounted, onUnmounted, ref } from 'vue'
 import { EventsOff, EventsOn, OnFileDrop } from '../../wailsjs/runtime/runtime'
-import { AddFiles, AddPaths, ConvertToAbsolute, ConvertToRelative, GetData, SaveData, SetRuntimeMs, UpdateIcon } from '../api'
+import { AddFiles, AddPaths, ConvertToAbsolute, ConvertToRelative, GetData, SaveData, SetAlwaysOnTop, SetRuntimeMs, UpdateIcon } from '../api'
 import { debounce, isAutoIcon, randomUUID, showError } from '../utils'
 import { showToast } from './useToast'
 
@@ -18,6 +18,7 @@ export interface StoreSettings {
   game_mode: boolean
   absolute_paths: boolean
   auto_hide: boolean
+  always_on_top: boolean
 }
 
 export interface Store {
@@ -32,7 +33,7 @@ function newStore(): Store {
   return {
     apps: {},
     categories: [],
-    settings: { game_mode: true, absolute_paths: true, auto_hide: true },
+    settings: { game_mode: true, absolute_paths: true, auto_hide: true, always_on_top: false },
   }
 }
 
@@ -83,6 +84,20 @@ export function useStore() {
   }
 
   const save = debounce(saveNow, 300)
+
+  // === 外部改动（用户手动编辑 go-launcher-data.json）===
+  // 后端轮询到文件被手改后会推送 store:reloaded：文件内容视为权威，先丢弃尚未
+  // 落盘的本地改动，再整体替换本地 store + state。
+  function onStoreReloaded(data: AppData) {
+    save.cancel()
+    applyData(data)
+    showToast('Reloaded from go-launcher-data.json')
+  }
+
+  // 手改内容不是合法 JSON（例如编辑到一半）：后端保留旧数据，这里只提示一次。
+  function onStoreReloadFailed() {
+    showToast('go-launcher-data.json is not valid JSON; change ignored', 'error')
+  }
 
   function forceActiveTab() {
     const saved = savedActiveTab.value
@@ -136,6 +151,21 @@ export function useStore() {
     await save()
   }
 
+  /** 复制 tab：沿用同一批 item（apps 全局共享），只复制槽位排列 */
+  async function duplicateTab(guid: string) {
+    const src = store.value.categories.find(c => c.guid === guid)
+    if (!src)
+      return
+    const copy: Category = {
+      guid: randomUUID(),
+      name: `${src.name} (copy)`,
+      slots: [...src.slots],
+    }
+    store.value.categories.push(copy)
+    setActiveTab(copy.guid)
+    await saveNow()
+  }
+
   async function moveTab(from: number, to: number) {
     if (from < 0 || from >= store.value.categories.length || to < 0 || to >= store.value.categories.length)
       return
@@ -175,7 +205,7 @@ export function useStore() {
     return dot > 0 ? base.slice(0, dot) : base
   }
 
-  async function createItem(fields: { name: string, path: string, args: string, working_dir: string, icon: string }) {
+  async function createItem(fields: { name: string, path: string, args: string, working_dir: string, icon: string, run_as_admin: boolean }) {
     // path 可为空：用于仅打开 Working directory 的目录型 item；name 为空才拦截
     const name = fields.name.trim() || defaultTitle(fields.path)
     if (!name)
@@ -195,6 +225,7 @@ export function useStore() {
       args: fields.args.trim(),
       working_dir: fields.working_dir.trim(),
       icon: fields.icon.trim(),
+      run_as_admin: fields.run_as_admin,
       runtime_ms: 0,
     }
     store.value.apps[guid] = item
@@ -429,6 +460,12 @@ export function useStore() {
     await save()
   }
 
+  // 置顶由后端立即应用到窗口并自行持久化，前端同步本地开关即可
+  async function setAlwaysOnTop(enabled: boolean) {
+    store.value.settings.always_on_top = enabled
+    await SetAlwaysOnTop(enabled)
+  }
+
   async function setRuntimeMs(guid: string, ms: number) {
     const cleanMs = Math.max(0, Math.floor(ms))
     await SetRuntimeMs(guid, cleanMs)
@@ -486,11 +523,14 @@ export function useStore() {
     EventsOn('state:updated', (st: Record<string, ItemState>) => {
       state.value = st
     })
+    EventsOn('store:reloaded', onStoreReloaded)
+    EventsOn('store:reload-failed', onStoreReloadFailed)
     OnFileDrop(onDrop, false)
   })
 
   onUnmounted(() => {
     EventsOff('state:updated')
+    EventsOff('store:reloaded', 'store:reload-failed')
   })
 
   return {
@@ -505,6 +545,7 @@ export function useStore() {
     addTab,
     removeTab,
     renameTab,
+    duplicateTab,
     moveTab,
     addItems,
     createItem,
@@ -522,6 +563,7 @@ export function useStore() {
     batchUpdateIcons,
     setGameMode,
     setAutoHide,
+    setAlwaysOnTop,
     setRuntimeMs,
     setAbsolutePaths,
     convertToAbsolute,
